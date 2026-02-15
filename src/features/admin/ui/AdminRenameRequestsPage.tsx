@@ -118,7 +118,7 @@ export default function AdminRenameRequestsPage() {
 	return (
 		<AdminSurface>
 			<AdminGate status={status} redirectPath={redirectPath} t={ta}>
-				<div className="grid gap-4">
+				<div className="grid gap-4 grid-cols-1">
 					<AdminToolbar
 						title={ta('renameRequestsTitle')}
 						countText={
@@ -165,7 +165,7 @@ export default function AdminRenameRequestsPage() {
 							{debouncedQuery.trim() ? ta('noMatchesRenameRequests') : ta('noRenameRequests')}
 						</p>
 					) : (
-						<div className="grid gap-3">
+						<div className="grid gap-3 grid-cols-1">
 							{rows.renameRequests.map((row, idx) => {
 								const key = (row.id ?? idx).toString();
 								const steamid64 = row.steamid64 ?? null;
