@@ -11,7 +11,7 @@
     "canary:email": "tsx scripts/canaryEmail.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^12.5.0",
+    "better-sqlite3": "^12.6.2",
     "next": "16.1.6",
     "next-intl": "^4.8.3",
     "pino": "^10.1.1",
