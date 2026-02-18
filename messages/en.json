@@ -7,7 +7,8 @@
     "aria": "Navigation",
     "home": "Home",
     "joinGames": "Join Games",
-    "feed": "Feed"
+    "feed": "Feed",
+    "profile": "Profile"
   },
   "footer": {
     "termsLink": "Terms of use"
@@ -97,6 +98,10 @@
     "signedInAs": "Signed in as {name}",
     "notAssociatedWithValve": "This service is not associated with Valve Corp.",
     "clickSteamButton": "Click the button above to continue."
+  },
+  "discordAuth": {
+    "link": "Link Discord",
+    "relink": "Relink Discord"
   },
   "admin": {
     "nav": "Admin",
@@ -424,6 +429,37 @@
     "notice": "This part of the website is still in development.",
     "joinPrompt": "In the meantime, please join our Discord or Telegram to get updates and schedules."
   },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Your current account details and access status.",
+    "loading": "Loading profile...",
+    "notAuthorized": "You need to sign in with Steam to view your profile.",
+    "fields": {
+      "personaName": "Steam name",
+      "callsign": "Callsign",
+      "steamId": "SteamID64",
+      "accessLevel": "Access level",
+      "discord": "Discord",
+      "playerConfirmed": "Player confirmed",
+      "application": "Application",
+      "renameRequired": "Rename required",
+      "pendingRename": "Pending rename request"
+    },
+    "values": {
+      "yes": "Yes",
+      "no": "No",
+      "missing": "Not set",
+      "discordLinked": "Linked",
+      "discordNotLinked": "Not linked",
+      "applicationSubmitted": "Submitted",
+      "applicationMissing": "Not submitted"
+    },
+    "access": {
+      "guest": "Guest",
+      "player": "Player",
+      "admin": "Admin"
+    }
+  },
   "welcome": {
     "applyButton": "Join Games",
     "applyButtonShort": "Join Games",
@@ -472,5 +508,24 @@
     },
     "disclaimerTitle": "Important note",
     "disclaimerText": "Triad Tactics is a gaming project within Arma Reforger. We do not support, promote, or justify real-world war, violence, or hatred, and we do not create missions that depict ongoing real-world conflicts."
+  },
+  "authError": {
+    "title": "Authentication error",
+    "defaultMessage": "Authentication failed. Please try again in a moment.",
+    "errorCode": "Error code: {code}",
+    "backHome": "Return to home",
+    "codes": {
+      "discord_oauth_state_invalid": "Discord authorization state is invalid. Please try linking again.",
+      "discord_env_missing": "Discord configuration is incomplete on the server.",
+      "discord_token_exchange_failed": "Failed to exchange Discord authorization code.",
+      "discord_access_token_missing": "Discord did not return an access token.",
+      "discord_user_fetch_failed": "Failed to fetch your Discord account data.",
+      "discord_user_id_missing": "Discord account identifier is missing in the response.",
+      "discord_user_update_failed": "Failed to save your Discord identity.",
+      "discord_guild_join_failed": "Failed to add your account to the Discord server.",
+      "discord_role_assign_failed": "Failed to assign your Discord role.",
+      "discord_callback_route_failed": "Discord authentication failed unexpectedly.",
+      "steam_callback_route_failed": "Steam authentication failed unexpectedly."
+    }
   }
 }

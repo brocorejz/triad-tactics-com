@@ -7,4 +7,5 @@ export interface User {
 	rename_required_at?: string | null;
 	rename_required_reason?: string | null;
 	rename_required_by_steamid64?: string | null;
+	discord_id?: string | null;
 }

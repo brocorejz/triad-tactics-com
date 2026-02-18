@@ -48,6 +48,7 @@ function applyMigrations(db: Database.Database) {
 			if (alreadyApplied) continue;
 
 			db.exec(migration.up);
+
 			insertMigration.run(migration.id, migration.name);
 		}
 	});

@@ -1,4 +1,5 @@
 import type { User } from '@/features/users/domain/types';
+import { decryptToken, encryptToken } from '@/platform/crypto/tokenCrypto';
 import { getDb } from '@/platform/db/connection';
 
 type UserRow = {
@@ -10,6 +11,7 @@ type UserRow = {
 	rename_required_at: string | null;
 	rename_required_reason: string | null;
 	rename_required_by_steamid64: string | null;
+	discord_id: string | null;
 };
 
 export function getOrCreateUserBySteamId64(input: { steamid64: string }) {
@@ -18,7 +20,7 @@ export function getOrCreateUserBySteamId64(input: { steamid64: string }) {
 	const fallbackCallsign = `Steam_${steamid64}`;
 	const select = db.prepare(`
 		SELECT u.id, u.created_at, u.player_confirmed_at, u.confirmed_application_id,
-			u.current_callsign,
+			u.current_callsign, u.discord_id,
 			rr.required_at as rename_required_at,
 			rr.reason as rename_required_reason,
 			rr.required_by_steamid64 as rename_required_by_steamid64
@@ -67,7 +69,7 @@ export function getUserBySteamId64(steamid64: string): User | null {
 	const db = getDb();
 	const stmt = db.prepare(`
 		SELECT u.id, u.created_at, u.player_confirmed_at, u.confirmed_application_id,
-			u.current_callsign,
+			u.current_callsign, u.discord_id,
 			rr.required_at as rename_required_at,
 			rr.reason as rename_required_reason,
 			rr.required_by_steamid64 as rename_required_by_steamid64
@@ -108,4 +110,75 @@ export function getLatestDeclineReasonByUserId(userId: number) {
 	const row = stmt.get(userId) as { decline_reason?: string | null } | undefined;
 	const reason = row?.decline_reason ?? null;
 	return reason && reason.trim() ? reason : null;
+}
+
+export function setDiscordIdentityByUserId(input: {
+	userId: number;
+	discordId: string;
+	discordToken: string;
+}) {
+	const db = getDb();
+	try {
+		const updateDiscordId = db.prepare(`
+			UPDATE users
+			SET discord_id = ?
+			WHERE id = ?
+		`);
+		const run = db.transaction(() => {
+			const info = updateDiscordId.run(input.discordId, input.userId);
+			if (info.changes === 0) return false;
+
+			const saved = saveDiscordToken({ userId: input.userId, discordToken: input.discordToken });
+			if (!saved.success) throw new Error('discord_token_save_failed');
+			return true;
+		});
+		return { success: run() };
+	} catch {
+		return { success: false, error: 'database_error' as const };
+	}
+}
+
+export function saveDiscordToken(input: { userId: number; discordToken: string }) {
+	const db = getDb();
+	const encrypted = encryptToken(input.discordToken);
+	const stmt = db.prepare(`
+		UPDATE users
+		SET discord_token_encrypted = ?,
+			discord_token_iv = ?
+		WHERE id = ?
+	`);
+
+	try {
+		const info = stmt.run(encrypted.encryptedToken, encrypted.iv, input.userId);
+		return { success: info.changes > 0 } as const;
+	} catch {
+		return { success: false, error: 'database_error' as const };
+	}
+}
+
+type DiscordTokenRow = {
+	discord_token_encrypted?: string | null;
+	discord_token_iv?: string | null;
+};
+
+export function getDiscordTokenByUserId(userId: number): string | null {
+	const db = getDb();
+	const row = db
+		.prepare(
+			`
+			SELECT discord_token_encrypted, discord_token_iv
+			FROM users
+			WHERE id = ?
+		`
+		)
+		.get(userId) as DiscordTokenRow | undefined;
+	if (!row) return null;
+
+	if (row.discord_token_encrypted && row.discord_token_iv) {
+		return decryptToken({
+			encryptedToken: row.discord_token_encrypted,
+			iv: row.discord_token_iv
+		});
+	}
+	return null;
 }

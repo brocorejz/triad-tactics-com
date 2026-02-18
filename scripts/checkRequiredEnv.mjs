@@ -7,8 +7,22 @@ const requiredInProduction = [
   'BREVO_API_KEY',
   'BREVO_SENDER_EMAIL',
   'BREVO_SENDER_NAME',
+  // Encrypts persisted Discord OAuth tokens at rest.
+  'DISCORD_TOKEN_ENCRYPTION_KEY',
   // Protects cron-triggered outbox endpoint
-  'OUTBOX_CRON_SECRET'
+  'OUTBOX_CRON_SECRET',
+  // Discord application client ID
+  'DISCORD_CLIENT_ID',
+  // Discord application client secret
+  'DISCORD_CLIENT_SECRET',
+  // Discord application bot token
+  'DISCORD_BOT_TOKEN',
+  // URI for Discord to redirect on, during auth process
+  'DISCORD_REDIRECT_URI',
+  // Server ID
+  'DISCORD_GUILD_ID',
+  // Confirmed role ID
+  'DISCORD_CONFIRMED_ROLE_ID',
 ];
 
 if (process.env.NODE_ENV !== 'production') {

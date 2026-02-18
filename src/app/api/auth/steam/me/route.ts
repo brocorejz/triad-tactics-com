@@ -1,6 +1,6 @@
-import { getSteamMeRoute } from '@/features/steamAuth/adapters/next/meRoute';
+import { getUserMeRoute } from '@/features/users/adapters/next/meRoute';
 import { withApiGuards } from '@/platform/apiGates';
 
 export const runtime = 'nodejs';
 
-export const GET = withApiGuards(getSteamMeRoute, { name: 'api.auth.steam.me' });
+export const GET = withApiGuards(getUserMeRoute, { name: 'api.auth.steam.me' });

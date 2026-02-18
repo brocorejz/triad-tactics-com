@@ -1,15 +1,18 @@
 import { z } from 'zod';
 import { sqliteBoolean } from '@/platform/validation/zod';
 
-const steamMeDisconnectedSchema = z.object({
+export type UserAccessLevel = 'guest' | 'player' | 'admin';
+
+const userStatusDisconnectedSchema = z.object({
 	connected: z.literal(false)
 });
 
-const steamMeConnectedSchema = z.object({
+const userStatusConnectedSchema = z.object({
 	connected: z.literal(true),
 	steamid64: z.string(),
 	personaName: z.string().nullable(),
 	currentCallsign: z.string().nullable(),
+	discordId: z.string().nullable(),
 	hasExisting: sqliteBoolean,
 	submittedAt: z.string().nullable(),
 	renameRequired: sqliteBoolean,
@@ -20,13 +23,14 @@ const steamMeConnectedSchema = z.object({
 	accessLevel: z.enum(['guest', 'player', 'admin'])
 });
 
-export type SteamMeStatus =
+export type UserStatus =
 	| { connected: false }
 	| {
 			connected: true;
 			steamid64: string;
 			personaName: string | null;
 			currentCallsign: string | null;
+			discordId: string | null;
 			hasExisting: boolean;
 			submittedAt: string | null;
 			renameRequired: boolean;
@@ -34,16 +38,20 @@ export type SteamMeStatus =
 			renameRequiredReason: string | null;
 			renameRequiredBySteamId64: string | null;
 			renameRequiredByCallsign: string | null;
-			accessLevel: 'guest' | 'player' | 'admin';
+			accessLevel: UserAccessLevel;
 	  };
 
-export function parseSteamMeStatus(input: unknown): SteamMeStatus | null {
-	const connected = steamMeConnectedSchema.safeParse(input);
+export function isConfirmedByAccessLevel(accessLevel: UserAccessLevel): boolean {
+	return accessLevel !== 'guest';
+}
+
+export function parseUserStatus(input: unknown): UserStatus | null {
+	const connected = userStatusConnectedSchema.safeParse(input);
 	if (connected.success) {
 		return connected.data;
 	}
 
-	const disconnected = steamMeDisconnectedSchema.safeParse(input);
+	const disconnected = userStatusDisconnectedSchema.safeParse(input);
 	if (disconnected.success) {
 		return disconnected.data;
 	}

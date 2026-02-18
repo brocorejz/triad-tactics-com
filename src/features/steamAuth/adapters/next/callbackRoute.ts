@@ -5,6 +5,7 @@ import { handleSteamCallback } from '@/features/steamAuth/useCases/handleSteamCa
 import { getRequestOrigin } from './origin';
 import { steamAuthDeps } from '@/features/steamAuth/deps';
 import { errorToLogObject, logger } from '@/platform/logger';
+import { defaultLocale } from '@/i18n/locales';
 
 export async function getSteamCallbackRoute(request: NextRequest): Promise<NextResponse> {
 	try {
@@ -22,6 +23,8 @@ export async function getSteamCallbackRoute(request: NextRequest): Promise<NextR
 		return NextResponse.redirect(new URL(redirectPath || '/', origin));
 	} catch (error: unknown) {
 		logger.warn({ ...errorToLogObject(error) }, 'steam_callback_route_failed');
-		return NextResponse.redirect(new URL('/', getRequestOrigin(request)));
+		const errorUrl = new URL(`/${defaultLocale}/auth/error`, getRequestOrigin(request));
+		errorUrl.searchParams.set('message', 'steam_callback_route_failed');
+		return NextResponse.redirect(errorUrl);
 	}
 }

@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/routing';
 import { LanguageSwitcher } from '@/features/language/ui/root';
-import { useAdminStatus, useSteamStatus } from '@/features/steamAuth/ui/root';
+import { useAdminStatus } from '@/features/steamAuth/ui/root';
+import { useUserStatus } from '@/features/users/ui/useUserStatus';
 import { DropdownMenuPanel } from '@/features/appShell/ui/root';
+import { isConfirmedByAccessLevel } from "@/features/users/domain/api";
 
 function isActivePath(currentPathname: string, href: string) {
 	if (href === '/') return currentPathname === '/';
@@ -26,7 +28,7 @@ export default function SiteNavBar() {
 	const ta = useTranslations('admin');
 	const pathname = usePathname();
 	const status = useAdminStatus();
-	const steamStatus = useSteamStatus();
+	const steamStatus = useUserStatus();
 	const adminMenuRef = useRef<HTMLDetailsElement>(null);
 
 	useEffect(() => {
@@ -36,7 +38,9 @@ export default function SiteNavBar() {
 
 	const items = useMemo(() => {
 		const base = [{ href: '/', label: t('home') }];
-		if (steamStatus?.connected && (steamStatus.accessLevel === 'player' || steamStatus.accessLevel === 'admin')) {
+		const isAuthorized =
+			steamStatus?.connected && (isConfirmedByAccessLevel(steamStatus.accessLevel));
+		if (isAuthorized) {
 			base.push({ href: '/feed', label: t('feed') });
 		}
 		return base;

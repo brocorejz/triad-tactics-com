@@ -7,7 +7,8 @@
     "aria": "التنقل",
     "home": "الرئيسية",
     "joinGames": "انضم إلى اللعب",
-    "feed": "الخلاصة"
+    "feed": "الخلاصة",
+    "profile": "الملف الشخصي"
   },
   "footer": {
     "termsLink": "شروط الاستخدام"
@@ -97,6 +98,10 @@
     "signedInAs": "تم تسجيل الدخول باسم {name}",
     "notAssociatedWithValve": "هذه الخدمة غير مرتبطة بشركة Valve Corp.",
     "clickSteamButton": "اضغط على الزر أعلاه للمتابعة."
+  },
+  "discordAuth": {
+    "link": "ربط Discord",
+    "relink": "إعادة ربط Discord"
   },
   "admin": {
     "nav": "الإدارة",
@@ -424,6 +429,37 @@
     "notice": "هذا القسم من الموقع ما زال قيد التطوير.",
     "joinPrompt": "في الوقت الحالي، انضم إلى Discord أو Telegram للحصول على التحديثات والجداول."
   },
+  "profile": {
+    "title": "الملف الشخصي",
+    "subtitle": "بيانات الحساب الحالي وحالة الوصول.",
+    "loading": "جارٍ تحميل الملف الشخصي...",
+    "notAuthorized": "يجب تسجيل الدخول عبر Steam لعرض الملف الشخصي.",
+    "fields": {
+      "personaName": "اسم Steam",
+      "callsign": "نداء",
+      "steamId": "SteamID64",
+      "accessLevel": "مستوى الوصول",
+      "discord": "Discord",
+      "playerConfirmed": "تم تأكيد اللاعب",
+      "application": "الطلب",
+      "renameRequired": "مطلوب تغيير نداء",
+      "pendingRename": "طلب تغيير النداء"
+    },
+    "values": {
+      "yes": "نعم",
+      "no": "لا",
+      "missing": "غير محدد",
+      "discordLinked": "مرتبط",
+      "discordNotLinked": "غير مرتبط",
+      "applicationSubmitted": "مُقدَّم",
+      "applicationMissing": "غير مُقدَّم"
+    },
+    "access": {
+      "guest": "ضيف",
+      "player": "لاعب",
+      "admin": "مشرف"
+    }
+  },
   "welcome": {
     "applyButton": "انضم للألعاب",
     "applyButtonShort": "انضم للألعاب",
@@ -472,5 +508,24 @@
     },
     "disclaimerTitle": "تنبيه مهم",
     "disclaimerText": "Triad Tactics هو مشروع ألعاب ومحاكاة خيالية ضمن Arma Reforger. نحن لا ندعم أو نروّج أو نبرّر الحروب الواقعية أو العنف أو الكراهية، كما أننا لا نصمّم مهاماً تُجسّد صراعات واقعية جارية."
+  },
+  "authError": {
+    "title": "خطأ في المصادقة",
+    "defaultMessage": "فشلت عملية المصادقة. يرجى المحاولة مرة أخرى بعد قليل.",
+    "errorCode": "رمز الخطأ: {code}",
+    "backHome": "العودة إلى الرئيسية",
+    "codes": {
+      "discord_oauth_state_invalid": "حالة تفويض Discord غير صالحة. حاول الربط مرة أخرى.",
+      "discord_env_missing": "إعدادات Discord على الخادم غير مكتملة.",
+      "discord_token_exchange_failed": "فشل استبدال رمز تفويض Discord.",
+      "discord_access_token_missing": "لم يُرجع Discord رمز الوصول.",
+      "discord_user_fetch_failed": "فشل جلب بيانات حساب Discord.",
+      "discord_user_id_missing": "معرّف Discord مفقود في الاستجابة.",
+      "discord_user_update_failed": "فشل حفظ ربط حساب Discord.",
+      "discord_guild_join_failed": "فشل إضافة الحساب إلى خادم Discord.",
+      "discord_role_assign_failed": "فشل تعيين دور Discord.",
+      "discord_callback_route_failed": "حدث خطأ غير متوقع أثناء مصادقة Discord.",
+      "steam_callback_route_failed": "حدث خطأ غير متوقع أثناء مصادقة Steam."
+    }
   }
 }

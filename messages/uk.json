@@ -7,7 +7,8 @@
     "aria": "Навігація",
     "home": "Головна",
     "joinGames": "Приєднатися",
-    "feed": "Стрічка"
+    "feed": "Стрічка",
+    "profile": "Профіль"
   },
   "footer": {
     "termsLink": "Умови користування"
@@ -97,6 +98,10 @@
     "signedInAs": "Ви увійшли як {name}",
     "notAssociatedWithValve": "Цей сервіс не пов’язаний з Valve Corp.",
     "clickSteamButton": "Натисніть кнопку вище, щоб продовжити."
+  },
+  "discordAuth": {
+      "link": "Прив'язати Discord",
+      "relink": "Переприв'язати Discord"
   },
   "admin": {
     "nav": "Адмін",
@@ -424,6 +429,37 @@
     "notice": "Цей розділ сайту ще в розробці.",
     "joinPrompt": "Поки що приєднуйтесь до нашого Discord або Telegram, щоб отримувати оновлення та розклад."
   },
+  "profile": {
+    "title": "Профіль",
+    "subtitle": "Дані поточного акаунта та статус доступу.",
+    "loading": "Завантаження профілю...",
+    "notAuthorized": "Щоб переглянути профіль, увійдіть через Steam.",
+    "fields": {
+      "personaName": "Ім'я в Steam",
+      "callsign": "Позивний",
+      "steamId": "SteamID64",
+      "accessLevel": "Рівень доступу",
+      "discord": "Discord",
+      "playerConfirmed": "Гравець підтверджений",
+      "application": "Заявка",
+      "renameRequired": "Потрібна зміна позивного",
+      "pendingRename": "Запит на зміну позивного"
+    },
+    "values": {
+      "yes": "Так",
+      "no": "Ні",
+      "missing": "Не вказано",
+      "discordLinked": "Прив'язано",
+      "discordNotLinked": "Не прив'язано",
+      "applicationSubmitted": "Подана",
+      "applicationMissing": "Не подана"
+    },
+    "access": {
+      "guest": "Гість",
+      "player": "Гравець",
+      "admin": "Адмін"
+    }
+  },
   "welcome": {
     "applyButton": "Доєднатись",
     "applyButtonShort": "Доєднатись",
@@ -472,5 +508,24 @@
     },
     "disclaimerTitle": "Важливо",
     "disclaimerText": "Triad Tactics - виключно ігровий проєкт в межах Arma Reforger. Ми не підтримуємо, не пропагуємо й не виправдовуємо реальні війни, насильство або ненависть, а також не створюємо місії, що відтворюють поточні реальні конфлікти."
+  },
+  "authError": {
+    "title": "Помилка авторизації",
+    "defaultMessage": "Не вдалося виконати авторизацію. Спробуйте ще раз за хвилину.",
+    "errorCode": "Код помилки: {code}",
+    "backHome": "На головну",
+    "codes": {
+      "discord_oauth_state_invalid": "Стан авторизації Discord недійсний. Спробуйте прив'язати ще раз.",
+      "discord_env_missing": "Конфігурація Discord на сервері неповна.",
+      "discord_token_exchange_failed": "Не вдалося обміняти код авторизації Discord.",
+      "discord_access_token_missing": "Discord не повернув access token.",
+      "discord_user_fetch_failed": "Не вдалося отримати дані акаунта Discord.",
+      "discord_user_id_missing": "У відповіді відсутній ідентифікатор Discord.",
+      "discord_user_update_failed": "Не вдалося зберегти прив'язку Discord.",
+      "discord_guild_join_failed": "Не вдалося додати акаунт на Discord-сервер.",
+      "discord_role_assign_failed": "Не вдалося видати роль у Discord.",
+      "discord_callback_route_failed": "Помилка в обробнику авторизації Discord.",
+      "steam_callback_route_failed": "Помилка в обробнику авторизації Steam."
+    }
   }
 }

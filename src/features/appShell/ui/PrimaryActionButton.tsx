@@ -2,16 +2,17 @@
 
 import React from 'react';
 import { Link } from "@/i18n/routing";
-import { useSteamStatus } from "@/features/steamAuth/ui/useSteamStatus";
+import { useUserStatus } from "@/features/users/ui/useUserStatus";
+import { isConfirmedByAccessLevel } from "@/features/users/domain/api";
 
 type PrimaryActionButtonProps = {
     primaryAction?: { href: string; label: string };
 }
 
 export default function PrimaryActionButton ({primaryAction}: PrimaryActionButtonProps) {
-    const steamStatus = useSteamStatus();
+    const steamStatus = useUserStatus();
 
-    const authorizedAndConfirmed = steamStatus?.connected && (steamStatus?.accessLevel === 'player' || steamStatus?.accessLevel === 'admin');
+    const authorizedAndConfirmed = steamStatus?.connected && (isConfirmedByAccessLevel(steamStatus.accessLevel));
 
     if (!primaryAction || authorizedAndConfirmed) {
         return null;
