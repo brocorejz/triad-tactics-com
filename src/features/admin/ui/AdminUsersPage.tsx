@@ -169,6 +169,7 @@ export default function AdminUsersPage() {
 								const key = (row.id ?? idx).toString();
 								const steamid64 = row.steamid64 ?? null;
 								const callsign = row.current_callsign ?? null;
+								const discordId = row.discord_id ?? null;
 								const createdAt = row.created_at ?? '';
 								const renameRequiredAt = row.rename_required_at ?? null;
 								const renameRequiredReason = row.rename_required_reason ?? null;
@@ -223,6 +224,11 @@ export default function AdminUsersPage() {
 											<AdminField label={ta('colCallsign')}>
 												<p>{callsign ?? ''}</p>
 											</AdminField>
+											{discordId ? (
+												<AdminField label={ta('discordId')}>
+													<p>{discordId}</p>
+												</AdminField>
+											) : null}
 											{renameRequiredAt ? (
 												<AdminField label={ta('colRenameRequiredAt')}>
 													<p>{renameRequiredAt}</p>

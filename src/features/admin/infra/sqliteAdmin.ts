@@ -14,6 +14,7 @@ export function listUsers(status: 'all' | 'rename_required' | 'confirmed'): Admi
 	const stmt = db.prepare(`
 		SELECT u.id, u.created_at, u.player_confirmed_at, u.confirmed_application_id,
 			u.current_callsign,
+			u.discord_id as discord_id,
 			rrq.required_at as rename_required_at,
 			rrq.reason as rename_required_reason,
 			rrq.required_by_steamid64 as rename_required_by_steamid64,

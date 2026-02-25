@@ -235,7 +235,8 @@
     "contentLocaleEn": "Англійська",
     "contentLocaleRu": "Російська",
     "contentLocaleUk": "Українська",
-    "contentLocaleAr": "Арабська"
+    "contentLocaleAr": "Арабська",
+    "discordId": "Discord ID"
   },
   "rename": {
     "title": "Потрібна зміна позивного",

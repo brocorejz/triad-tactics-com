@@ -11,6 +11,7 @@ function matchesQuery(row: AdminUserRow, q: string) {
 	if (!needle) return true;
 	const fields = [
 		row.steamid64,
+		row.discord_id,
 		row.current_callsign,
 		row.id,
 		row.confirmed_application_id

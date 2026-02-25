@@ -235,7 +235,8 @@
     "mailingConfirmConfigTitle": "Конфигурация",
     "mailingConfirmConfigLoading": "Загружаем конфигурацию…",
     "mailingConfirmConfigError": "Не удалось загрузить конфигурацию.",
-    "mailingConfirmRecipientsTitle": "Получатели"
+    "mailingConfirmRecipientsTitle": "Получатели",
+    "discordId": "Discord ID"
   },
   "rename": {
     "title": "Требуется переименование",

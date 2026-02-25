@@ -235,7 +235,8 @@
     "contentLocaleEn": "English",
     "contentLocaleRu": "Russian",
     "contentLocaleUk": "Ukrainian",
-    "contentLocaleAr": "Arabic"
+    "contentLocaleAr": "Arabic",
+    "discordId": "Discord ID"
   },
   "rename": {
     "title": "Rename required",

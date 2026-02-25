@@ -235,7 +235,8 @@
     "contentLocaleEn": "الإنجليزية",
     "contentLocaleRu": "الروسية",
     "contentLocaleUk": "الأوكرانية",
-    "contentLocaleAr": "العربية"
+    "contentLocaleAr": "العربية",
+    "discordId": "Discord ID"
   },
   "rename": {
     "title": "مطلوب تغيير اسم النداء",
