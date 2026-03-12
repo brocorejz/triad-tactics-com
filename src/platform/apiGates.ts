@@ -147,12 +147,15 @@ export async function enforceSteamGatesForApi(request: NextRequest): Promise<Res
 	}
 }
 
-export function withApiGuards(handler: RouteHandler, options: ApiLoggingOptions): RouteHandler {
-	return withApiLogging(async (request: NextRequest) => {
+export function withApiGuards<TArgs extends unknown[]>(
+	handler: RouteHandler<TArgs>,
+	options: ApiLoggingOptions
+): RouteHandler<TArgs> {
+	return withApiLogging(async (request: NextRequest, ...args: TArgs) => {
 		return (
 			enforceSameOriginForAdminMutations(request) ??
 			(await enforceSteamGatesForApi(request)) ??
-			(await handler(request))
+			(await handler(request, ...args))
 		);
 	}, options);
 }

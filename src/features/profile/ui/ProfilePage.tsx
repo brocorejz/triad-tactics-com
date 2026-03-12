@@ -37,6 +37,22 @@ export default function ProfilePage() {
 				<div className="mt-6 grid gap-4 sm:grid-cols-2">
 					{profileData.items && profileData.items.map((item) => <ProfileField label={item.label} value={item.value} key={item.label} />)}
 				</div>
+
+				{profileData.badges && profileData.badges.length > 0 ? (
+					<div className="mt-6">
+						<p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{t('badgesLabel')}</p>
+						<div className="mt-3 flex flex-wrap gap-2">
+							{profileData.badges.map((badge) => (
+								<span
+									key={badge.label}
+									className="inline-flex items-center rounded-2xl border border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 px-3 py-1.5 text-sm font-semibold text-neutral-50"
+								>
+									{badge.label}
+								</span>
+							))}
+						</div>
+					</div>
+				) : null}
 			</div>
 		</section>
 	);

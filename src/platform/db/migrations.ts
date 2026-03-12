@@ -375,5 +375,136 @@ export const migrations: Migration[] = [
 				ON users(discord_id)
 				WHERE discord_id IS NOT NULL;
 		`
+	},
+	{
+		id: 8,
+		name: 'missions_and_badges',
+		up: `
+			CREATE TABLE IF NOT EXISTS missions (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				short_code TEXT,
+				status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'archived')),
+				title TEXT NOT NULL DEFAULT '',
+				description TEXT NOT NULL DEFAULT '',
+				starts_at DATETIME,
+				server_name TEXT NOT NULL DEFAULT '',
+				server_host TEXT NOT NULL DEFAULT '',
+				server_port INTEGER,
+				early_password TEXT,
+				final_password TEXT,
+				server_details_hidden INTEGER NOT NULL DEFAULT 0 CHECK(server_details_hidden IN (0, 1)),
+				priority_claim_opens_at DATETIME,
+				priority_claim_manual_state TEXT NOT NULL DEFAULT 'default'
+					CHECK(priority_claim_manual_state IN ('default', 'open', 'closed')),
+				regular_join_enabled INTEGER NOT NULL DEFAULT 0 CHECK(regular_join_enabled IN (0, 1)),
+				priority_gameplay_released_at DATETIME,
+				regular_gameplay_released_at DATETIME,
+				slotting_json TEXT NOT NULL,
+				slotting_revision INTEGER NOT NULL DEFAULT 1,
+				settings_revision INTEGER NOT NULL DEFAULT 1,
+				published_at DATETIME,
+				archived_at DATETIME,
+				archive_status TEXT CHECK(archive_status IN ('completed', 'canceled')),
+				archive_reason TEXT,
+				archive_result_json TEXT,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				created_by_steamid64 TEXT,
+				updated_by_steamid64 TEXT,
+				published_by_steamid64 TEXT,
+				archived_by_steamid64 TEXT
+			);
+
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_missions_short_code_unique
+				ON missions(LOWER(short_code))
+				WHERE short_code IS NOT NULL AND TRIM(short_code) != '';
+			CREATE INDEX IF NOT EXISTS idx_missions_status ON missions(status);
+			CREATE INDEX IF NOT EXISTS idx_missions_published_at ON missions(published_at);
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_missions_single_published
+				ON missions(status)
+				WHERE status = 'published';
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_missions_single_draft
+				ON missions(status)
+				WHERE status = 'draft';
+
+			CREATE TABLE IF NOT EXISTS badge_types (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				label TEXT NOT NULL,
+				status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'retired')),
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				created_by_steamid64 TEXT,
+				updated_by_steamid64 TEXT
+			);
+
+			CREATE TABLE IF NOT EXISTS user_badges (
+				user_id INTEGER NOT NULL,
+				badge_type_id INTEGER NOT NULL,
+				assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				assigned_by_steamid64 TEXT NOT NULL,
+				PRIMARY KEY (user_id, badge_type_id),
+				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+				FOREIGN KEY (badge_type_id) REFERENCES badge_types(id) ON DELETE CASCADE
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_user_badges_badge_type_id
+				ON user_badges(badge_type_id);
+
+			CREATE TABLE IF NOT EXISTS mission_priority_badges (
+				mission_id INTEGER NOT NULL,
+				badge_type_id INTEGER NOT NULL,
+				PRIMARY KEY (mission_id, badge_type_id),
+				FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE,
+				FOREIGN KEY (badge_type_id) REFERENCES badge_types(id) ON DELETE CASCADE
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_mission_priority_badges_badge_type_id
+				ON mission_priority_badges(badge_type_id);
+
+			CREATE TABLE IF NOT EXISTS mission_regular_joins (
+				mission_id INTEGER NOT NULL,
+				user_id INTEGER NOT NULL,
+				joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				joined_by_steamid64 TEXT NOT NULL,
+				PRIMARY KEY (mission_id, user_id),
+				FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE,
+				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_mission_regular_joins_user_id
+				ON mission_regular_joins(user_id);
+
+			CREATE TABLE IF NOT EXISTS mission_regular_release_snapshot (
+				mission_id INTEGER NOT NULL,
+				user_id INTEGER NOT NULL,
+				released_at DATETIME NOT NULL,
+				PRIMARY KEY (mission_id, user_id),
+				FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE,
+				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_mission_regular_release_snapshot_user_id
+				ON mission_regular_release_snapshot(user_id);
+
+			CREATE TABLE IF NOT EXISTS mission_audit_events (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				mission_id INTEGER NOT NULL,
+				actor_user_id INTEGER,
+				actor_steamid64 TEXT,
+				event_type TEXT NOT NULL,
+				payload TEXT NOT NULL,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE,
+				FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_mission_audit_events_mission_created
+				ON mission_audit_events(mission_id, created_at);
+			CREATE INDEX IF NOT EXISTS idx_mission_audit_events_type
+				ON mission_audit_events(event_type);
+
+			DROP INDEX IF EXISTS idx_content_settings_updated_at;
+			DROP TABLE IF EXISTS content_settings;
+		`
 	}
 ];

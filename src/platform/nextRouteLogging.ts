@@ -2,7 +2,10 @@ import { NextRequest } from 'next/server';
 import { createRequestId, errorToLogObject, logger } from './logger';
 import { runWithRequestContext } from './requestContext';
 
-export type RouteHandler = (request: NextRequest) => Response | Promise<Response>;
+export type RouteHandler<TArgs extends unknown[] = []> = (
+	request: NextRequest,
+	...args: TArgs
+) => Response | Promise<Response>;
 
 export type ApiLoggingOptions = {
 	name: string;
@@ -72,11 +75,11 @@ async function summarizeResponseForLog(response: Response): Promise<
 	}
 }
 
-export function withApiLogging(
-	handler: RouteHandler,
+export function withApiLogging<TArgs extends unknown[]>(
+	handler: RouteHandler<TArgs>,
 	options: ApiLoggingOptions
-): RouteHandler {
-	return async (request: NextRequest) => {
+): RouteHandler<TArgs> {
+	return async (request: NextRequest, ...args: TArgs) => {
 		const startedAt = Date.now();
 		const requestId = request.headers.get('x-request-id') || createRequestId();
 		const pathname = request.nextUrl.pathname;
@@ -97,7 +100,7 @@ export function withApiLogging(
 		try {
 			const response = await runWithRequestContext(
 				{ requestId, route: options.name },
-				() => handler(request)
+				() => handler(request, ...args)
 			);
 			const durationMs = Date.now() - startedAt;
 

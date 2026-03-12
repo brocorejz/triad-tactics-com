@@ -1,0 +1,569 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/features/admin/adapters/next/adminAuth';
+import {
+	archiveGameRequestSchema,
+	cancelGameRequestSchema,
+	deleteArchivedMissionRequestSchema,
+	importGameSlottingRequestSchema,
+	publishGameRequestSchema,
+	updateGameSettingsRequestSchema,
+	updateGameSlottingRequestSchema
+} from '@/features/games/domain/requests';
+import {
+	archiveGameDeps,
+	cancelGameDeps,
+	deleteArchivedMissionDeps,
+	getAdminGameMissionDeps,
+	getMissionAuditDeps,
+	importGameSlottingDeps,
+	publishGameDeps,
+	releasePriorityGameplayDeps,
+	releaseRegularGameplayDeps,
+	updateGameSettingsDeps,
+	updateGameSlottingDeps
+} from '@/features/games/deps';
+import { archiveGame } from '@/features/games/useCases/archiveGame';
+import { cancelGame } from '@/features/games/useCases/cancelGame';
+import { deleteArchivedMission } from '@/features/games/useCases/deleteArchivedMission';
+import { getAdminGameMission } from '@/features/games/useCases/getAdminGameMission';
+import { getMissionAuditHistory } from '@/features/games/useCases/getMissionAuditHistory';
+import { importGameSlotting } from '@/features/games/useCases/importGameSlotting';
+import { publishGame } from '@/features/games/useCases/publishGame';
+import { releasePriorityGameplay } from '@/features/games/useCases/releasePriorityGameplay';
+import { releaseRegularGameplay } from '@/features/games/useCases/releaseRegularGameplay';
+import { updateGameSettings } from '@/features/games/useCases/updateGameSettings';
+import { updateGameSlotting } from '@/features/games/useCases/updateGameSlotting';
+import { errorToLogObject, logger } from '@/platform/logger';
+import type { ZodIssue } from 'zod';
+
+type AdminGameMissionRouteContext = {
+	params: Promise<{ missionId: string }>;
+};
+
+async function readRequestBody(request: NextRequest): Promise<unknown> {
+	const raw = await request.text();
+	if (!raw.trim()) return {};
+	return JSON.parse(raw) as unknown;
+}
+
+async function readMissionId(context: AdminGameMissionRouteContext): Promise<number | null> {
+	const { missionId } = await context.params;
+	const parsed = Number(missionId);
+	if (!Number.isSafeInteger(parsed) || parsed < 1) return null;
+	return parsed;
+}
+
+function serializeValidationIssue(issue: ZodIssue): {
+	code: string;
+	path: Array<string | number>;
+	message: string;
+	minimum?: number;
+	maximum?: number;
+} {
+	const serialized: {
+		code: string;
+		path: Array<string | number>;
+		message: string;
+		minimum?: number;
+		maximum?: number;
+	} = {
+		code: issue.code,
+		path: issue.path.filter((segment): segment is string | number => typeof segment === 'string' || typeof segment === 'number'),
+		message: issue.message
+	};
+
+	if ('minimum' in issue && typeof issue.minimum === 'number') {
+		serialized.minimum = issue.minimum;
+	}
+
+	if ('maximum' in issue && typeof issue.maximum === 'number') {
+		serialized.maximum = issue.maximum;
+	}
+
+	return serialized;
+}
+
+function mapSlottingMutationError(result: {
+	error:
+		| 'not_found'
+		| 'slotting_invalid'
+		| 'legacy_slotting_invalid'
+		| 'slotting_revision_conflict'
+		| 'regular_join_requires_regular_slots'
+		| 'destructive_change_requires_confirmation'
+		| 'database_error';
+	destructiveChanges?: unknown;
+}): NextResponse {
+	if (result.error === 'not_found') {
+		return NextResponse.json({ error: 'not_found' }, { status: 404 });
+	}
+
+	if (result.error === 'slotting_invalid' || result.error === 'legacy_slotting_invalid') {
+		return NextResponse.json({ error: result.error }, { status: 400 });
+	}
+
+	if (result.error === 'destructive_change_requires_confirmation') {
+		return NextResponse.json(
+			{ error: result.error, destructiveChanges: result.destructiveChanges ?? [] },
+			{ status: 409 }
+		);
+	}
+
+	const status = result.error === 'database_error' ? 500 : 409;
+	return NextResponse.json({ error: result.error }, { status });
+}
+
+function mapGameplayReleaseError(result: { error: string }): NextResponse {
+	if (result.error === 'not_found') {
+		return NextResponse.json({ error: 'not_found' }, { status: 404 });
+	}
+
+	const status = result.error === 'database_error' ? 500 : 409;
+	return NextResponse.json({ error: result.error }, { status });
+}
+
+function mapArchiveLifecycleError(result: { error: string }): NextResponse {
+	if (result.error === 'not_found') {
+		return NextResponse.json({ error: 'not_found' }, { status: 404 });
+	}
+
+	if (result.error === 'archive_result_invalid' || result.error === 'cancel_reason_required') {
+		return NextResponse.json({ error: result.error }, { status: 400 });
+	}
+
+	const status = result.error === 'database_error' ? 500 : 409;
+	return NextResponse.json({ error: result.error }, { status });
+}
+
+function mapDeleteArchivedMissionError(result: { error: string }): NextResponse {
+	if (result.error === 'not_found') {
+		return NextResponse.json({ error: 'not_found' }, { status: 404 });
+	}
+
+	const status = result.error === 'database_error' ? 500 : 409;
+	return NextResponse.json({ error: result.error }, { status });
+}
+
+export async function getAdminGameMissionRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const mission = getAdminGameMission(getAdminGameMissionDeps, { missionId });
+		if (!mission.ok) {
+			if (mission.error === 'not_found') {
+				return NextResponse.json({ error: 'not_found' }, { status: 404 });
+			}
+			return NextResponse.json({ error: 'database_error' }, { status: 500 });
+		}
+
+		return NextResponse.json({ success: true, mission: mission.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_load_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function putAdminGameSettingsRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = updateGameSettingsRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json(
+				{ error: 'validation_error', details: parsed.error.issues.map(serializeValidationIssue) },
+				{ status: 400 }
+			);
+		}
+
+		const updated = updateGameSettings(updateGameSettingsDeps, {
+			...parsed.data,
+			missionId,
+			updatedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!updated.ok) {
+			if (updated.error === 'not_found') {
+				return NextResponse.json({ error: 'not_found' }, { status: 404 });
+			}
+			const status = updated.error === 'database_error' ? 500 : 409;
+			return NextResponse.json({ error: updated.error }, { status });
+		}
+
+		return NextResponse.json({ success: true, mission: updated.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_settings_update_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function putAdminGameSlottingRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = updateGameSlottingRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const updated = updateGameSlotting(updateGameSlottingDeps, {
+			...parsed.data,
+			missionId,
+			updatedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!updated.ok) {
+			return mapSlottingMutationError(updated);
+		}
+
+		return NextResponse.json({ success: true, mission: updated.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_slotting_update_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGameSlottingImportRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = importGameSlottingRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const imported = importGameSlotting(importGameSlottingDeps, {
+			...parsed.data,
+			missionId,
+			updatedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!imported.ok) {
+			return mapSlottingMutationError(imported);
+		}
+
+		return NextResponse.json({ success: true, mission: imported.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_slotting_import_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGamePublishRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = publishGameRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const published = publishGame(publishGameDeps, {
+			...parsed.data,
+			missionId,
+			publishedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!published.ok) {
+			if (published.error === 'not_found') {
+				return NextResponse.json({ error: 'not_found' }, { status: 404 });
+			}
+			if (published.error === 'publish_validation_failed') {
+				return NextResponse.json(
+					{ error: published.error, reasons: published.reasons ?? [] },
+					{ status: 409 }
+				);
+			}
+			const status = published.error === 'database_error' ? 500 : 409;
+			return NextResponse.json({ error: published.error }, { status });
+		}
+
+		return NextResponse.json({ success: true, mission: published.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_publish_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGameReleasePriorityRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const released = releasePriorityGameplay(releasePriorityGameplayDeps, {
+			missionId,
+			releasedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!released.ok) {
+			return mapGameplayReleaseError(released);
+		}
+
+		return NextResponse.json({ success: true, mission: released.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_release_priority_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGameReleaseRegularRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const released = releaseRegularGameplay(releaseRegularGameplayDeps, {
+			missionId,
+			releasedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!released.ok) {
+			return mapGameplayReleaseError(released);
+		}
+
+		return NextResponse.json({ success: true, mission: released.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_release_regular_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGameArchiveRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = archiveGameRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const archived = archiveGame(archiveGameDeps, {
+			...parsed.data,
+			missionId,
+			archivedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!archived.ok) {
+			return mapArchiveLifecycleError(archived);
+		}
+
+		return NextResponse.json({ success: true, mission: archived.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_archive_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGameCancelRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = cancelGameRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const canceled = cancelGame(cancelGameDeps, {
+			...parsed.data,
+			missionId,
+			archivedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!canceled.ok) {
+			return mapArchiveLifecycleError(canceled);
+		}
+
+		return NextResponse.json({ success: true, mission: canceled.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_cancel_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function getAdminGameAuditRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const audit = getMissionAuditHistory(getMissionAuditDeps, { missionId });
+		if (!audit.ok) {
+			if (audit.error === 'not_found') {
+				return NextResponse.json({ error: 'not_found' }, { status: 404 });
+			}
+			return NextResponse.json({ error: 'database_error' }, { status: 500 });
+		}
+
+		return NextResponse.json({ success: true, events: audit.events });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_audit_load_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function deleteAdminArchivedMissionRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = deleteArchivedMissionRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const deleted = deleteArchivedMission(deleteArchivedMissionDeps, {
+			...parsed.data,
+			missionId
+		});
+
+		if (!deleted.ok) {
+			return mapDeleteArchivedMissionError(deleted);
+		}
+
+		return NextResponse.json({ success: true });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_archived_game_delete_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}

@@ -14,7 +14,8 @@ function matchesQuery(row: AdminUserRow, q: string) {
 		row.discord_id,
 		row.current_callsign,
 		row.id,
-		row.confirmed_application_id
+		row.confirmed_application_id,
+		...row.badges.flatMap((badge) => [badge.label])
 	];
 	return fields
 		.map((v) => (typeof v === 'string' || typeof v === 'number' ? String(v) : ''))

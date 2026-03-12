@@ -37,6 +37,7 @@ export type SteamAuthUsersRepo = {
 				discord_id?: string | null;
 			}
 		| null;
+	getBadgeLabelsByUserId?: (userId: number) => { label: string }[];
 };
 
 export type SteamAuthRenameRequestsRepo = {

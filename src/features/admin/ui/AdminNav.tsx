@@ -6,7 +6,7 @@ import { usePathname, Link } from '@/i18n/routing';
 import { useTranslations } from 'next-intl';
 
 type AdminNavItem = {
-	key: 'applications' | 'users' | 'renameRequests' | 'mailing' | 'content';
+	key: 'applications' | 'users' | 'badges' | 'renameRequests' | 'mailing' | 'games';
 	href: string;
 	label: string;
 };
@@ -21,9 +21,10 @@ export default function AdminNav() {
 		() => [
 			{ key: 'applications', href: '/admin', label: ta('navApplications') },
 			{ key: 'users', href: '/admin/users', label: ta('navUsers') },
+			{ key: 'badges', href: '/admin/badges', label: ta('navBadges') },
 			{ key: 'renameRequests', href: '/admin/rename-requests', label: ta('navRenameRequests') },
 			{ key: 'mailing', href: '/admin/mailing', label: ta('navMailing') },
-			{ key: 'content', href: '/admin/content', label: ta('navContent') }
+			{ key: 'games', href: '/admin/games', label: ta('navGames') }
 		],
 		[ta]
 	);
@@ -31,9 +32,10 @@ export default function AdminNav() {
 	const activeHref = useMemo(() => {
 		// pathname comes without locale prefix
 		if (pathname.startsWith('/admin/users')) return '/admin/users';
+		if (pathname.startsWith('/admin/badges')) return '/admin/badges';
 		if (pathname.startsWith('/admin/rename-requests')) return '/admin/rename-requests';
 		if (pathname.startsWith('/admin/mailing')) return '/admin/mailing';
-		if (pathname.startsWith('/admin/content')) return '/admin/content';
+		if (pathname.startsWith('/admin/games')) return '/admin/games';
 		return '/admin';
 	}, [pathname]);
 

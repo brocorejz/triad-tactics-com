@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/routing';
 import { LanguageSwitcher } from '@/features/language/ui/root';
+import { useCurrentGameSummary } from '@/features/games/ui/useCurrentGameSummary';
 import { useAdminStatus } from '@/features/steamAuth/ui/root';
 import { useUserStatus } from '@/features/users/ui/useUserStatus';
 import { DropdownMenuPanel } from '@/features/appShell/ui/root';
-import { isConfirmedByAccessLevel } from "@/features/users/domain/api";
+import { isConfirmedByAccessLevel } from '@/features/users/domain/api';
 
 function isActivePath(currentPathname: string, href: string) {
 	if (href === '/') return currentPathname === '/';
@@ -17,11 +18,18 @@ function isActivePath(currentPathname: string, href: string) {
 function getActiveAdminHref(pathname: string) {
 	// pathname comes without locale prefix
 	if (pathname.startsWith('/admin/users')) return '/admin/users';
+	if (pathname.startsWith('/admin/badges')) return '/admin/badges';
 	if (pathname.startsWith('/admin/rename-requests')) return '/admin/rename-requests';
 	if (pathname.startsWith('/admin/mailing')) return '/admin/mailing';
-	if (pathname.startsWith('/admin/content')) return '/admin/content';
+	if (pathname.startsWith('/admin/games')) return '/admin/games';
 	return '/admin';
 }
+
+type SiteNavItem = {
+	href: string;
+	label: string;
+	badge?: string | null;
+};
 
 export default function SiteNavBar() {
 	const t = useTranslations('nav');
@@ -30,6 +38,9 @@ export default function SiteNavBar() {
 	const status = useAdminStatus();
 	const steamStatus = useUserStatus();
 	const adminMenuRef = useRef<HTMLDetailsElement>(null);
+	const isAuthorized =
+		steamStatus?.connected === true && isConfirmedByAccessLevel(steamStatus.accessLevel);
+	const currentGame = useCurrentGameSummary(isAuthorized);
 
 	useEffect(() => {
 		// Close the dropdown when navigating to a new route.
@@ -37,14 +48,17 @@ export default function SiteNavBar() {
 	}, [pathname]);
 
 	const items = useMemo(() => {
-		const base = [{ href: '/', label: t('home') }];
-		const isAuthorized =
-			steamStatus?.connected && (isConfirmedByAccessLevel(steamStatus.accessLevel));
+		const base: SiteNavItem[] = [{ href: '/', label: t('home') }];
 		if (isAuthorized) {
-			base.push({ href: '/feed', label: t('feed') });
+			base.push({
+				href: '/games',
+				label: t('games'),
+				badge: currentGame ? t('currentIndicator') : null
+			});
+			base.push({ href: '/feed', label: t('feed'), badge: null });
 		}
 		return base;
-	}, [t, steamStatus]);
+	}, [currentGame, isAuthorized, t]);
 
 	return (
 		<div className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-950 px-4 py-3 shadow-sm shadow-black/20">
@@ -63,7 +77,17 @@ export default function SiteNavBar() {
 										: 'text-neutral-300 hover:bg-white/5 hover:text-neutral-50')
 								}
 							>
-								{item.label}
+								<span>{item.label}</span>
+								{item.badge ? (
+									<span
+										className={
+											'ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] ' +
+											(active ? 'bg-black/15 text-neutral-950' : 'bg-[color:var(--accent)]/20 text-[color:var(--accent)]')
+										}
+									>
+										{item.badge}
+									</span>
+								) : null}
 							</Link>
 						);
 					})}
@@ -99,9 +123,10 @@ export default function SiteNavBar() {
 									const items = [
 										{ href: '/admin', label: ta('navApplications') },
 										{ href: '/admin/users', label: ta('navUsers') },
+										{ href: '/admin/badges', label: ta('navBadges') },
 										{ href: '/admin/rename-requests', label: ta('navRenameRequests') },
 										{ href: '/admin/mailing', label: ta('navMailing') },
-										{ href: '/admin/content', label: ta('navContent') }
+										{ href: '/admin/games', label: ta('navGames') }
 									] as const;
 									const activeHref = getActiveAdminHref(pathname);
 									return items.map((item) => (

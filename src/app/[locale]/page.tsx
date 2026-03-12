@@ -4,7 +4,7 @@ import { WelcomePage } from '@/features/welcome/ui/root';
 import { STEAM_SESSION_COOKIE } from '@/features/steamAuth/sessionCookie';
 import { steamAuthDeps } from '@/features/steamAuth/deps';
 import { getUserFlowRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
-import { getUserStatus } from "@/features/users/useCases/getUserStatus";
+import { getUserStatus } from '@/features/users/useCases/getUserStatus';
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
 	const { locale } = await params;
@@ -15,5 +15,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 	const flowRedirect = getUserFlowRedirect(locale, status);
 	if (flowRedirect) redirect(flowRedirect);
 
-	return <WelcomePage />;
+	return (
+		<WelcomePage />
+	);
 }

@@ -42,6 +42,9 @@ const eslintConfig = defineConfig([
   {
     files: ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
     rules: {
+      // Unused-var tuning (allow underscore-prefixed params in route handlers etc.)
+      "@typescript-eslint/no-unused-vars": ["warn", { "args": "after-used", "argsIgnorePattern": "^_", "ignoreRestSiblings": true }],
+
       // Formatting hygiene
       "eol-last": ["error", "always"],
       "no-trailing-spaces": "error",

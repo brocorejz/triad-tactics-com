@@ -5,7 +5,7 @@ import {
 	setSteamSessionIdentity
 } from '@/features/steamAuth/infra/sqliteSessions';
 import { getBySteamId64, getByUserId } from '@/features/apply/infra/sqliteApplications';
-import { getUserBySteamId64, upsertUser } from '@/features/users/infra/sqliteUsers';
+import { getBadgeLabelsByUserId, getUserBySteamId64, upsertUser } from '@/features/users/infra/sqliteUsers';
 import {
 	getLatestDeclineReasonByUserId,
 	hasPendingRenameRequestByUserId
@@ -28,7 +28,8 @@ export const steamAuthDeps: SteamAuthDeps = {
 	},
 	users: {
 		upsertUser,
-		getUserBySteamId64
+		getUserBySteamId64,
+		getBadgeLabelsByUserId
 	},
 	renameRequests: {
 		hasPendingByUserId: hasPendingRenameRequestByUserId,

@@ -25,6 +25,10 @@ export function getUserStatus(deps: SteamAuthDeps, sid: string | null): UserStat
 			? 'player'
 			: 'guest';
 
+	const badges = user?.id && deps.users.getBadgeLabelsByUserId
+		? deps.users.getBadgeLabelsByUserId(user.id)
+		: [];
+
 	return {
 		connected: true,
 		steamid64: identity.steamid64,
@@ -38,6 +42,7 @@ export function getUserStatus(deps: SteamAuthDeps, sid: string | null): UserStat
 		renameRequiredReason: latestDeclineReason ?? user?.rename_required_reason ?? null,
 		renameRequiredBySteamId64,
 		renameRequiredByCallsign,
-		accessLevel
+		accessLevel,
+		badges
 	};
 }

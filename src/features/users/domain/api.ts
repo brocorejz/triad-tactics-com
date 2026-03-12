@@ -20,7 +20,8 @@ const userStatusConnectedSchema = z.object({
 	renameRequiredReason: z.string().nullable(),
 	renameRequiredBySteamId64: z.string().nullable(),
 	renameRequiredByCallsign: z.string().nullable(),
-	accessLevel: z.enum(['guest', 'player', 'admin'])
+	accessLevel: z.enum(['guest', 'player', 'admin']),
+	badges: z.array(z.object({ label: z.string() })).optional()
 });
 
 export type UserStatus =
@@ -39,6 +40,7 @@ export type UserStatus =
 			renameRequiredBySteamId64: string | null;
 			renameRequiredByCallsign: string | null;
 			accessLevel: UserAccessLevel;
+			badges?: { label: string }[];
 	  };
 
 export function isConfirmedByAccessLevel(accessLevel: UserAccessLevel): boolean {

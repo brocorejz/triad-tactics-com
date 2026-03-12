@@ -5,7 +5,13 @@ import { useTranslations } from 'next-intl';
 import { usePathname } from '@/i18n/routing';
 import { useParams } from 'next/navigation';
 import { parseAdminStatusResponse } from '@/features/admin/domain/api';
-import { parseAdminUsersResponse, type AdminUsersView } from '@/features/admin/domain/api';
+import {
+	parseAdminBadgesResponse,
+	parseAdminUserBadgeMutationResponse,
+	parseAdminUsersResponse,
+	type AdminUsersView
+} from '@/features/admin/domain/api';
+import type { AdminBadgeType, AdminUserBadge } from '@/features/admin/domain/types';
 import {
 	AdminBadge,
 	AdminButton,
@@ -38,6 +44,11 @@ export default function AdminUsersPage() {
 	const searchInputRef = useRef<HTMLInputElement | null>(null);
 	const [renamingSteamId, setRenamingSteamId] = useState<string | null>(null);
 	const [renameError, setRenameError] = useState<string | null>(null);
+	const [badgeCatalog, setBadgeCatalog] = useState<AdminBadgeType[]>([]);
+	const [badgeCatalogState, setBadgeCatalogState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+	const [badgeSelections, setBadgeSelections] = useState<Record<number, string>>({});
+	const [badgeMutationKey, setBadgeMutationKey] = useState<string | null>(null);
+	const [badgeError, setBadgeError] = useState<string | null>(null);
 
 	const [debouncedQuery, setDebouncedQuery] = useState('');
 	useEffect(() => {
@@ -61,6 +72,33 @@ export default function AdminUsersPage() {
 			cancelled = true;
 		};
 	}, []);
+
+	useEffect(() => {
+		if (!status?.connected || !status.isAdmin) return;
+		let cancelled = false;
+		(async () => {
+			try {
+				setBadgeCatalogState('loading');
+				const res = await fetch('/api/admin/badges', { cache: 'no-store' });
+				const json: unknown = (await res.json()) as unknown;
+				const parsed = parseAdminBadgesResponse(json);
+				if (cancelled) return;
+				if (!res.ok || !parsed || 'error' in parsed) {
+					setBadgeCatalogState('error');
+					return;
+				}
+
+				setBadgeCatalog(parsed.badges);
+				setBadgeCatalogState('ready');
+			} catch {
+				if (!cancelled) setBadgeCatalogState('error');
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [status]);
 
 	const loadUsers = useMemo(() => {
 		return async (opts: { status: 'all' | 'rename_required' | 'confirmed'; q: string }) => {
@@ -115,6 +153,72 @@ export default function AdminUsersPage() {
 		}
 	};
 
+	const replaceUserBadges = (userId: number, badges: AdminUserBadge[]) => {
+		setUsers((current) => {
+			if (!current || 'error' in current) return current;
+			return {
+				...current,
+				users: current.users.map((user) => (user.id === userId ? { ...user, badges } : user))
+			};
+		});
+	};
+
+	const handleAssignBadge = async (userId: number, directBadgeId?: number) => {
+		const badgeTypeId = directBadgeId ?? Number(badgeSelections[userId] ?? '');
+		if (!Number.isSafeInteger(badgeTypeId) || badgeTypeId < 1) return;
+
+		try {
+			setBadgeError(null);
+			setBadgeMutationKey(`assign:${userId}`);
+			const res = await fetch(`/api/admin/users/${userId}/badges`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ badgeTypeId })
+			});
+			const json: unknown = (await res.json()) as unknown;
+			const parsed = parseAdminUserBadgeMutationResponse(json);
+			if (!res.ok || !parsed || 'error' in parsed) {
+				setBadgeError(
+					parsed && 'error' in parsed && parsed.error === 'badge_retired'
+						? ta('userBadgesAssignRetiredError')
+						: ta('userBadgesAssignError')
+				);
+				return;
+			}
+
+			replaceUserBadges(userId, parsed.badges);
+			setBadgeSelections((current) => ({ ...current, [userId]: '' }));
+		} catch {
+			setBadgeError(ta('userBadgesAssignError'));
+		} finally {
+			setBadgeMutationKey(null);
+		}
+	};
+
+	const handleRemoveBadge = async (userId: number, badgeTypeId: number) => {
+		try {
+			setBadgeError(null);
+			setBadgeMutationKey(`remove:${userId}:${badgeTypeId}`);
+			const res = await fetch(`/api/admin/users/${userId}/badges`, {
+				method: 'DELETE',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ badgeTypeId })
+			});
+			const json: unknown = (await res.json()) as unknown;
+			const parsed = parseAdminUserBadgeMutationResponse(json);
+			if (!res.ok || !parsed || 'error' in parsed) {
+				setBadgeError(ta('userBadgesRemoveError'));
+				return;
+			}
+
+			replaceUserBadges(userId, parsed.badges);
+		} catch {
+			setBadgeError(ta('userBadgesRemoveError'));
+		} finally {
+			setBadgeMutationKey(null);
+		}
+	};
+
 	return (
 		<AdminSurface>
 			<AdminGate status={status} redirectPath={redirectPath} t={ta}>
@@ -165,6 +269,7 @@ export default function AdminUsersPage() {
 					) : (
 						<div className="grid gap-3 grid-cols-1">
 							{renameError ? <p className="text-sm text-neutral-300">{ta('renameError')}</p> : null}
+							{badgeError ? <p className="text-sm text-neutral-300">{badgeError}</p> : null}
 							{users.users.map((row, idx) => {
 								const key = (row.id ?? idx).toString();
 								const steamid64 = row.steamid64 ?? null;
@@ -249,6 +354,75 @@ export default function AdminUsersPage() {
 													<p>{confirmedAt}</p>
 												</AdminField>
 											) : null}
+													<AdminField label={ta('userBadgesField')}>
+														{badgeCatalogState === 'loading' ? (
+															<p className="text-sm text-neutral-400">{ta('loading')}</p>
+														) : badgeCatalogState === 'error' ? (
+															<p className="text-sm text-neutral-400">{ta('userBadgesCatalogLoadError')}</p>
+														) : badgeCatalog.length === 0 ? (
+															<p className="text-sm text-neutral-400">{ta('userBadgesNoCatalog')}</p>
+														) : (() => {
+															const allBadges = badgeCatalog.filter(
+																(b) => b.status === 'active' || row.badges.some((a) => a.id === b.id)
+															);
+															return allBadges.length === 0 ? (
+																<p className="text-sm text-neutral-400">{ta('userBadgesNone')}</p>
+															) : (
+																<div className="grid gap-2 sm:grid-cols-2">
+																	{allBadges.map((badge) => {
+																		const assigned = row.badges.some((a) => a.id === badge.id);
+																		const mutKey = assigned ? `remove:${row.id}:${badge.id}` : `assign:${row.id}`;
+																		const isMutating = badgeMutationKey === mutKey;
+																		const isRetiredUnassigned = badge.status === 'retired' && !assigned;
+																		return (
+																			<button
+																				key={badge.id}
+																				type="button"
+																				disabled={badgeMutationKey !== null || isRetiredUnassigned}
+																				onClick={() => {
+																					if (assigned) {
+																						void handleRemoveBadge(row.id, badge.id);
+																					} else {
+																						setBadgeSelections((c) => ({ ...c, [row.id]: String(badge.id) }));
+																						void handleAssignBadge(row.id, badge.id);
+																					}
+																				}}
+																				className={
+																					'flex items-center gap-3 rounded-2xl border p-3 text-left text-sm transition-colors disabled:cursor-not-allowed ' +
+																					(assigned
+																						? 'border-[color:var(--accent)]/40 bg-[color:var(--accent)]/10 text-neutral-50'
+																						: 'border-neutral-800 bg-neutral-950/60 text-neutral-300 hover:border-neutral-600') +
+																					(isRetiredUnassigned ? ' opacity-50' : '')
+																				}
+																			>
+																				<span
+																					className={
+																						'flex h-4 w-4 shrink-0 items-center justify-center rounded border ' +
+																						(assigned
+																							? 'border-[color:var(--accent)] bg-[color:var(--accent)] text-neutral-950'
+																							: 'border-neutral-600 bg-neutral-900')
+																					}
+																				>
+																					{assigned ? (
+																						<svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+																							<path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+																						</svg>
+																					) : null}
+																				</span>
+																				<span className="flex flex-wrap items-center gap-2">
+																					<span className="font-semibold">{badge.label}</span>
+																					{badge.status === 'retired' ? <AdminBadge>{ta('badgesStatusRetired')}</AdminBadge> : null}
+																				</span>
+																				{isMutating ? (
+																					<span className="ml-auto text-xs text-neutral-400">{ta('userBadgesUpdating')}</span>
+																				) : null}
+																			</button>
+																		);
+																	})}
+																</div>
+															);
+														})()}
+													</AdminField>
 										</div>
 									</AdminDisclosure>
 								);

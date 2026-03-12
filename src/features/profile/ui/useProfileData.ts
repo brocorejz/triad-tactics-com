@@ -51,6 +51,7 @@ export const useProfileData = (): ProfileData => {
                 label: t('fields.renameRequired'),
                 value: yesNo(status.renameRequired),
             }
-        ]
+        ],
+        badges: status.badges ?? []
     }
 }

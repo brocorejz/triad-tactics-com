@@ -5,22 +5,34 @@ import {
 	markApprovalEmailSent
 } from '@/features/apply/infra/sqliteApplications';
 import {
+	assignBadgeToUser,
 	clearUserRenameRequiredBySteamId64,
 	confirmApplication,
 	countUsersByStatus,
+	createBadgeType,
 	decideRenameRequest,
+	listBadgeTypes,
 	listRenameRequests,
 	listUsers,
+	removeBadgeFromUser,
 	setUserRenameRequiredBySteamId64
+	,
+	updateBadgeTypeStatus
 } from '@/features/admin/infra/sqliteAdmin';
 import { getUserBySteamId64 } from '@/features/users/infra/sqliteUsers';
 import { hasPendingRenameRequestByUserId } from '@/features/rename/infra/sqliteRenameRequests';
 import type {
+	AssignUserBadgeDeps,
 	ConfirmApplicationAndNotifyDeps,
+	CreateBadgeTypeDeps,
 	ListApplicationsDeps,
+	ListBadgeTypesDeps,
 	ListRenameRequestsDeps,
 	ListUsersDeps,
+	RemoveUserBadgeDeps,
 	RenameRequiredDeps
+	,
+	UpdateBadgeTypeStatusDeps
 } from './ports';
 import { enqueueOutboxEmail } from '@/platform/outbox/emailOutbox';
 import { buildApprovalContent, buildApprovedBroadcastContent } from '@/platform/email/brevo';
@@ -85,5 +97,35 @@ export const renameRequestsDeps: ListRenameRequestsDeps = {
 			if (result.success) return { success: true as const };
 			return { success: false as const, error: result.error };
 		}
+	}
+};
+
+export const listBadgeTypesDeps: ListBadgeTypesDeps = {
+	repo: {
+		listBadgeTypes
+	}
+};
+
+export const createBadgeTypeDeps: CreateBadgeTypeDeps = {
+	repo: {
+		createBadgeType
+	}
+};
+
+export const updateBadgeTypeStatusDeps: UpdateBadgeTypeStatusDeps = {
+	repo: {
+		updateBadgeTypeStatus
+	}
+};
+
+export const assignUserBadgeDeps: AssignUserBadgeDeps = {
+	repo: {
+		assignBadgeToUser
+	}
+};
+
+export const removeUserBadgeDeps: RemoveUserBadgeDeps = {
+	repo: {
+		removeBadgeFromUser
 	}
 };

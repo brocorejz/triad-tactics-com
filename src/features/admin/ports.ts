@@ -1,5 +1,5 @@
 import type { Application } from '@/features/apply/domain/types';
-import type { AdminRenameRequestRow, AdminUserRow } from '@/features/admin/domain/types';
+import type { AdminBadgeType, AdminRenameRequestRow, AdminUserBadge, AdminUserRow } from '@/features/admin/domain/types';
 
 export type AdminApplicationsRepo = {
 	getApplicationsByStatus: (status: 'active' | 'archived' | 'all') => Application[];
@@ -112,4 +112,46 @@ export type SendMailingDeps = {
 	email: {
 		buildApprovedBroadcastContent: ApprovedBroadcastBuilder;
 	};
+};
+
+export type AdminBadgesRepo = {
+	listBadgeTypes: () => AdminBadgeType[];
+	createBadgeType: (input: {
+		label: string;
+		createdBySteamId64: string;
+	}) => { success: true; badge: AdminBadgeType } | { success: false; error: 'database_error' };
+	updateBadgeTypeStatus: (input: {
+		badgeTypeId: number;
+		status: 'active' | 'retired';
+		updatedBySteamId64: string;
+	}) => { success: true; badge: AdminBadgeType } | { success: false; error: 'not_found' | 'database_error' };
+	assignBadgeToUser: (input: {
+		userId: number;
+		badgeTypeId: number;
+		assignedBySteamId64: string;
+	}) => { success: true; badges: AdminUserBadge[] } | { success: false; error: 'not_found' | 'badge_retired' | 'database_error' };
+	removeBadgeFromUser: (input: {
+		userId: number;
+		badgeTypeId: number;
+	}) => { success: true; badges: AdminUserBadge[] } | { success: false; error: 'not_found' | 'database_error' };
+};
+
+export type ListBadgeTypesDeps = {
+	repo: Pick<AdminBadgesRepo, 'listBadgeTypes'>;
+};
+
+export type CreateBadgeTypeDeps = {
+	repo: Pick<AdminBadgesRepo, 'createBadgeType'>;
+};
+
+export type UpdateBadgeTypeStatusDeps = {
+	repo: Pick<AdminBadgesRepo, 'updateBadgeTypeStatus'>;
+};
+
+export type AssignUserBadgeDeps = {
+	repo: Pick<AdminBadgesRepo, 'assignBadgeToUser'>;
+};
+
+export type RemoveUserBadgeDeps = {
+	repo: Pick<AdminBadgesRepo, 'removeBadgeFromUser'>;
 };

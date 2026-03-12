@@ -21,7 +21,19 @@ export const dbOperations = {
 		const db = getDb();
 		try {
 			db.exec(
-				'DELETE FROM rename_requests; DELETE FROM user_identities; DELETE FROM applications; DELETE FROM steam_sessions; DELETE FROM users;'
+				'DELETE FROM mission_audit_events; ' +
+				'DELETE FROM mission_regular_release_snapshot; ' +
+				'DELETE FROM mission_regular_joins; ' +
+				'DELETE FROM mission_priority_badges; ' +
+				'DELETE FROM user_badges; ' +
+				'DELETE FROM badge_types; ' +
+				'DELETE FROM missions; ' +
+				'DELETE FROM email_outbox; ' +
+				'DELETE FROM rename_requests; ' +
+				'DELETE FROM user_identities; ' +
+				'DELETE FROM applications; ' +
+				'DELETE FROM steam_sessions; ' +
+				'DELETE FROM users;'
 			);
 			return { success: true } as const;
 		} catch {

@@ -25,7 +25,22 @@ export const mailingRequestSchema = z.object({
 	bodyRu: z.string().trim().min(1).max(5000)
 });
 
+export const createBadgeTypeRequestSchema = z.object({
+	label: z.string().trim().min(1).max(120)
+});
+
+export const updateBadgeTypeStatusRequestSchema = z.object({
+	status: z.enum(['active', 'retired'])
+});
+
+export const mutateUserBadgeRequestSchema = z.object({
+	badgeTypeId: z.number().int().positive()
+});
+
 export type ConfirmApplicationRequest = z.infer<typeof confirmApplicationRequestSchema>;
 export type DecideRenameRequest = z.infer<typeof decideRenameRequestSchema>;
 export type RenameRequiredRequest = z.infer<typeof renameRequiredRequestSchema>;
 export type MailingRequest = z.infer<typeof mailingRequestSchema>;
+export type CreateBadgeTypeRequest = z.infer<typeof createBadgeTypeRequestSchema>;
+export type UpdateBadgeTypeStatusRequest = z.infer<typeof updateBadgeTypeStatusRequestSchema>;
+export type MutateUserBadgeRequest = z.infer<typeof mutateUserBadgeRequestSchema>;

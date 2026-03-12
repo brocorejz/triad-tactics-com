@@ -1,3 +1,23 @@
+export type AdminUserBadge = {
+	id: number;
+	label: string;
+	status: 'active' | 'retired';
+	assigned_at?: string;
+	assigned_by_steamid64?: string | null;
+};
+
+export type AdminBadgeType = {
+	id: number;
+	label: string;
+	status: 'active' | 'retired';
+	created_at?: string;
+	updated_at?: string;
+	created_by_steamid64?: string | null;
+	updated_by_steamid64?: string | null;
+	user_count: number;
+	mission_count: number;
+};
+
 export type AdminUserRow = {
 	id: number;
 	created_at?: string;
@@ -10,6 +30,7 @@ export type AdminUserRow = {
 	rename_required_by_steamid64?: string | null;
 	has_pending_rename_request: boolean;
 	steamid64?: string | null;
+	badges: AdminUserBadge[];
 };
 
 export type AdminRenameRequestRow = {

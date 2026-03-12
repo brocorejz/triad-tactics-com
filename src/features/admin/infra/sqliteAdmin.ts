@@ -1,7 +1,80 @@
 import { getDb } from '@/platform/db/connection';
 import { getBySteamId64, normalizeApplicationAnswers } from '@/features/apply/infra/sqliteApplications';
-import type { AdminRenameRequestRow, AdminUserRow } from '@/features/admin/domain/types';
+import type { AdminBadgeType, AdminRenameRequestRow, AdminUserBadge, AdminUserRow } from '@/features/admin/domain/types';
 import { getOrCreateUserBySteamId64, getUserBySteamId64 } from '@/features/users/infra/sqliteUsers';
+
+function listUserBadgesMap(userIds: number[]): Map<number, AdminUserBadge[]> {
+	if (userIds.length === 0) return new Map();
+
+	const db = getDb();
+	const placeholders = userIds.map(() => '?').join(', ');
+	const rows = db.prepare(`
+		SELECT
+			ub.user_id,
+			bt.id,
+			bt.label,
+			bt.status,
+			ub.assigned_at,
+			ub.assigned_by_steamid64
+		FROM user_badges ub
+		JOIN badge_types bt ON bt.id = ub.badge_type_id
+		WHERE ub.user_id IN (${placeholders})
+		ORDER BY
+			CASE bt.status WHEN 'active' THEN 0 ELSE 1 END,
+			LOWER(bt.label) ASC,
+			bt.id ASC
+	`).all(...userIds) as Array<AdminUserBadge & { user_id: number }>;
+
+	const badgesByUser = new Map<number, AdminUserBadge[]>();
+	for (const row of rows) {
+		const existing = badgesByUser.get(row.user_id) ?? [];
+		existing.push({
+			id: row.id,
+			label: row.label,
+			status: row.status,
+			assigned_at: row.assigned_at,
+			assigned_by_steamid64: row.assigned_by_steamid64
+		});
+		badgesByUser.set(row.user_id, existing);
+	}
+
+	return badgesByUser;
+}
+
+function listBadgesForUser(userId: number): AdminUserBadge[] {
+	return listUserBadgesMap([userId]).get(userId) ?? [];
+}
+
+function getBadgeTypeById(badgeTypeId: number): AdminBadgeType | null {
+	const db = getDb();
+	const row = db.prepare(`
+		SELECT
+			bt.id,
+			bt.label,
+			bt.status,
+			bt.created_at,
+			bt.updated_at,
+			bt.created_by_steamid64,
+			bt.updated_by_steamid64,
+			COALESCE(ub.user_count, 0) AS user_count,
+			COALESCE(mpb.mission_count, 0) AS mission_count
+		FROM badge_types bt
+		LEFT JOIN (
+			SELECT badge_type_id, COUNT(*) AS user_count
+			FROM user_badges
+			GROUP BY badge_type_id
+		) ub ON ub.badge_type_id = bt.id
+		LEFT JOIN (
+			SELECT badge_type_id, COUNT(*) AS mission_count
+			FROM mission_priority_badges
+			GROUP BY badge_type_id
+		) mpb ON mpb.badge_type_id = bt.id
+		WHERE bt.id = ?
+		LIMIT 1
+	`).get(badgeTypeId) as AdminBadgeType | undefined;
+
+	return row ?? null;
+}
 
 export function listUsers(status: 'all' | 'rename_required' | 'confirmed'): AdminUserRow[] {
 	const db = getDb();
@@ -31,11 +104,167 @@ export function listUsers(status: 'all' | 'rename_required' | 'confirmed'): Admi
 		${where}
 		ORDER BY u.created_at DESC
 	`);
-	const rows = stmt.all() as (AdminUserRow & { has_pending_rename_request: number | boolean })[];
+	const rows = stmt.all() as Array<Omit<AdminUserRow, 'badges'> & { has_pending_rename_request: number | boolean }>;
+	const badgesByUser = listUserBadgesMap(rows.map((row) => row.id));
 	return rows.map((row) => ({
 		...row,
-		has_pending_rename_request: !!row.has_pending_rename_request
+		has_pending_rename_request: !!row.has_pending_rename_request,
+		badges: badgesByUser.get(row.id) ?? []
 	}));
+}
+
+export function listBadgeTypes(): AdminBadgeType[] {
+	const db = getDb();
+	const rows = db.prepare(`
+		SELECT
+			bt.id,
+			bt.label,
+			bt.status,
+			bt.created_at,
+			bt.updated_at,
+			bt.created_by_steamid64,
+			bt.updated_by_steamid64,
+			COALESCE(ub.user_count, 0) AS user_count,
+			COALESCE(mpb.mission_count, 0) AS mission_count
+		FROM badge_types bt
+		LEFT JOIN (
+			SELECT badge_type_id, COUNT(*) AS user_count
+			FROM user_badges
+			GROUP BY badge_type_id
+		) ub ON ub.badge_type_id = bt.id
+		LEFT JOIN (
+			SELECT badge_type_id, COUNT(*) AS mission_count
+			FROM mission_priority_badges
+			GROUP BY badge_type_id
+		) mpb ON mpb.badge_type_id = bt.id
+		ORDER BY
+			CASE bt.status WHEN 'active' THEN 0 ELSE 1 END,
+			LOWER(bt.label) ASC,
+			bt.id ASC
+	`).all() as AdminBadgeType[];
+
+	return rows;
+}
+
+export function createBadgeType(input: { label: string; createdBySteamId64: string }) {
+	const db = getDb();
+
+	try {
+		const result = db.prepare(`
+			INSERT INTO badge_types (label, created_by_steamid64, updated_by_steamid64)
+			VALUES (?, ?, ?)
+		`).run(input.label, input.createdBySteamId64, input.createdBySteamId64);
+
+		const rowId = result.lastInsertRowid;
+		const badgeTypeId = typeof rowId === 'bigint' ? Number(rowId) : rowId;
+		const badge = getBadgeTypeById(badgeTypeId);
+		if (!badge) {
+			return { success: false as const, error: 'database_error' as const };
+		}
+
+		return { success: true as const, badge };
+	} catch {
+		return { success: false as const, error: 'database_error' as const };
+	}
+}
+
+export function updateBadgeTypeStatus(input: {
+	badgeTypeId: number;
+	status: 'active' | 'retired';
+	updatedBySteamId64: string;
+}) {
+	const db = getDb();
+	try {
+		const result = db.prepare(`
+			UPDATE badge_types
+			SET status = ?,
+				updated_at = CURRENT_TIMESTAMP,
+				updated_by_steamid64 = ?
+			WHERE id = ?
+		`).run(input.status, input.updatedBySteamId64, input.badgeTypeId);
+
+		if (result.changes < 1) {
+			return { success: false as const, error: 'not_found' as const };
+		}
+
+		const badge = getBadgeTypeById(input.badgeTypeId);
+		if (!badge) {
+			return { success: false as const, error: 'database_error' as const };
+		}
+
+		return { success: true as const, badge };
+	} catch {
+		return { success: false as const, error: 'database_error' as const };
+	}
+}
+
+export function assignBadgeToUser(input: {
+	userId: number;
+	badgeTypeId: number;
+	assignedBySteamId64: string;
+}) {
+	const db = getDb();
+	const selectUser = db.prepare(`SELECT id FROM users WHERE id = ? LIMIT 1`);
+	const selectBadge = db.prepare(`SELECT id, status FROM badge_types WHERE id = ? LIMIT 1`);
+	const insertBadge = db.prepare(`
+		INSERT INTO user_badges (user_id, badge_type_id, assigned_by_steamid64)
+		VALUES (?, ?, ?)
+		ON CONFLICT(user_id, badge_type_id) DO NOTHING
+	`);
+
+	try {
+		const run = db.transaction(() => {
+			const user = selectUser.get(input.userId) as { id: number } | undefined;
+			if (!user) {
+				return { success: false as const, error: 'not_found' as const };
+			}
+
+			const badge = selectBadge.get(input.badgeTypeId) as
+				| { id: number; status: 'active' | 'retired' }
+				| undefined;
+			if (!badge) {
+				return { success: false as const, error: 'not_found' as const };
+			}
+
+			if (badge.status !== 'active') {
+				return { success: false as const, error: 'badge_retired' as const };
+			}
+
+			insertBadge.run(input.userId, input.badgeTypeId, input.assignedBySteamId64);
+			return { success: true as const, badges: listBadgesForUser(input.userId) };
+		});
+
+		return run();
+	} catch {
+		return { success: false as const, error: 'database_error' as const };
+	}
+}
+
+export function removeBadgeFromUser(input: { userId: number; badgeTypeId: number }) {
+	const db = getDb();
+	const selectUser = db.prepare(`SELECT id FROM users WHERE id = ? LIMIT 1`);
+	const selectBadge = db.prepare(`SELECT id FROM badge_types WHERE id = ? LIMIT 1`);
+	const deleteBadge = db.prepare(`
+		DELETE FROM user_badges
+		WHERE user_id = ? AND badge_type_id = ?
+	`);
+
+	try {
+		const run = db.transaction(() => {
+			const user = selectUser.get(input.userId) as { id: number } | undefined;
+			const badge = selectBadge.get(input.badgeTypeId) as { id: number } | undefined;
+			if (!user || !badge) {
+				return { success: false as const, error: 'not_found' as const };
+			}
+
+			deleteBadge.run(input.userId, input.badgeTypeId);
+			return { success: true as const, badges: listBadgesForUser(input.userId) };
+		});
+
+		return run();
+	} catch {
+		return { success: false as const, error: 'database_error' as const };
+	}
 }
 
 export function countUsersByStatus(status: 'all' | 'rename_required' | 'confirmed') {

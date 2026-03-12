@@ -112,6 +112,18 @@ export function getLatestDeclineReasonByUserId(userId: number) {
 	return reason && reason.trim() ? reason : null;
 }
 
+export function getBadgeLabelsByUserId(userId: number): { label: string }[] {
+	const db = getDb();
+	const stmt = db.prepare(`
+		SELECT bt.label
+		FROM user_badges ub
+		JOIN badge_types bt ON bt.id = ub.badge_type_id
+		WHERE ub.user_id = ? AND bt.status = 'active'
+		ORDER BY LOWER(bt.label) ASC
+	`);
+	return stmt.all(userId) as { label: string }[];
+}
+
 export function setDiscordIdentityByUserId(input: {
 	userId: number;
 	discordId: string;

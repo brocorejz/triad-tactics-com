@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Application } from '@/features/apply/domain/types';
-import type { AdminRenameRequestRow, AdminUserRow } from './types';
+import type { AdminBadgeType, AdminRenameRequestRow, AdminUserBadge, AdminUserRow } from './types';
 import { sqliteBoolean } from '@/platform/validation/zod';
 
 const adminDisconnectedSchema = z.object({
@@ -68,6 +68,26 @@ const applicationSchema = z.object({
 	approval_email_sent_at: z.string().nullable().optional()
 });
 
+const adminUserBadgeSchema = z.object({
+	id: z.number(),
+	label: z.string(),
+	status: z.enum(['active', 'retired']),
+	assigned_at: z.string().optional(),
+	assigned_by_steamid64: z.string().nullable().optional()
+});
+
+const adminBadgeTypeSchema = z.object({
+	id: z.number(),
+	label: z.string(),
+	status: z.enum(['active', 'retired']),
+	created_at: z.string().optional(),
+	updated_at: z.string().optional(),
+	created_by_steamid64: z.string().nullable().optional(),
+	updated_by_steamid64: z.string().nullable().optional(),
+	user_count: z.number().int().min(0),
+	mission_count: z.number().int().min(0)
+});
+
 const adminUserRowSchema = z.object({
 	id: z.number(),
 	created_at: z.string().optional(),
@@ -79,7 +99,8 @@ const adminUserRowSchema = z.object({
 	rename_required_reason: z.string().nullable().optional(),
 	rename_required_by_steamid64: z.string().nullable().optional(),
 	has_pending_rename_request: sqliteBoolean,
-	steamid64: z.string().nullable().optional()
+	steamid64: z.string().nullable().optional(),
+	badges: z.array(adminUserBadgeSchema).default([])
 });
 
 const adminRenameRequestRowSchema = z.object({
@@ -133,6 +154,22 @@ const adminMailingSuccessSchema = z.object({
 	skippedDuplicate: z.number()
 });
 
+const adminBadgesSuccessSchema = z.object({
+	success: z.literal(true),
+	count: z.number(),
+	badges: z.array(adminBadgeTypeSchema)
+});
+
+const adminBadgeMutationSuccessSchema = z.object({
+	success: z.literal(true),
+	badge: adminBadgeTypeSchema
+});
+
+const adminUserBadgeMutationSuccessSchema = z.object({
+	success: z.literal(true),
+	badges: z.array(adminUserBadgeSchema)
+});
+
 const adminErrorSchema = z.object({
 	error: z.string()
 });
@@ -157,6 +194,18 @@ export type AdminMailingResult =
 			skippedNoEmail: number;
 			skippedDuplicate: number;
 	  }
+	| { error: string };
+
+export type AdminBadgesView =
+	| { success: true; count: number; badges: AdminBadgeType[] }
+	| { error: string };
+
+export type AdminBadgeMutationView =
+	| { success: true; badge: AdminBadgeType }
+	| { error: string };
+
+export type AdminUserBadgeMutationView =
+	| { success: true; badges: AdminUserBadge[] }
 	| { error: string };
 
 export function parseAdminApplicationsResponse(input: unknown): AdminApplicationsView | null {
@@ -197,6 +246,42 @@ export function parseAdminRenameRequestsResponse(input: unknown): AdminRenameReq
 
 export function parseAdminMailingResponse(input: unknown): AdminMailingResult | null {
 	const success = adminMailingSuccessSchema.safeParse(input);
+	if (success.success) {
+		return success.data;
+	}
+	const error = adminErrorSchema.safeParse(input);
+	if (error.success) {
+		return error.data;
+	}
+	return null;
+}
+
+export function parseAdminBadgesResponse(input: unknown): AdminBadgesView | null {
+	const success = adminBadgesSuccessSchema.safeParse(input);
+	if (success.success) {
+		return success.data;
+	}
+	const error = adminErrorSchema.safeParse(input);
+	if (error.success) {
+		return error.data;
+	}
+	return null;
+}
+
+export function parseAdminBadgeMutationResponse(input: unknown): AdminBadgeMutationView | null {
+	const success = adminBadgeMutationSuccessSchema.safeParse(input);
+	if (success.success) {
+		return success.data;
+	}
+	const error = adminErrorSchema.safeParse(input);
+	if (error.success) {
+		return error.data;
+	}
+	return null;
+}
+
+export function parseAdminUserBadgeMutationResponse(input: unknown): AdminUserBadgeMutationView | null {
+	const success = adminUserBadgeMutationSuccessSchema.safeParse(input);
 	if (success.success) {
 		return success.data;
 	}
