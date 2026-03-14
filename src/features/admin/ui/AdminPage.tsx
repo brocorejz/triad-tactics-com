@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { usePathname } from '@/i18n/routing';
 import { useParams } from 'next/navigation';
 import {
@@ -9,6 +9,8 @@ import {
 	parseAdminStatusResponse,
 	type AdminApplicationsView
 } from '@/features/admin/domain/api';
+import { formatLocalizedDateTime } from '@/platform/dateTime';
+import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 import {
 	AdminBadge,
 	AdminButton,
@@ -32,9 +34,11 @@ export default function AdminPage() {
 	const tf = useTranslations('form');
 	const pathname = usePathname();
 	const params = useParams();
-	const locale = (params.locale as string) || 'en';
+	const routeLocale = (params.locale as string) || 'en';
+	const locale = useLocale();
 
-	const redirectPath = useMemo(() => buildLocalizedPath(locale, pathname), [locale, pathname]);
+	const redirectPath = useMemo(() => buildLocalizedPath(routeLocale, pathname), [routeLocale, pathname]);
+	const { timeZone, hourCycle } = useViewerDateTimePreferences();
 
 	const [status, setStatus] = useState<AdminStatus | null>(null);
 	const [apps, setApps] = useState<AdminApplicationsView | null>(null);
@@ -199,6 +203,20 @@ export default function AdminPage() {
 							{apps.applications.map((row, idx) => {
 								const key = row.id ?? idx;
 								const isConfirmed = !!row.confirmed_at;
+								const createdAt = formatLocalizedDateTime(row.created_at ?? null, {
+									locale,
+									timeZone,
+									hourCycle,
+									dateStyle: 'medium',
+									timeStyle: 'short'
+								}) ?? row.created_at ?? '';
+								const confirmedAt = formatLocalizedDateTime(row.confirmed_at ?? null, {
+									locale,
+									timeZone,
+									hourCycle,
+									dateStyle: 'medium',
+									timeStyle: 'short'
+								}) ?? row.confirmed_at ?? '';
 								return (
 									<AdminDisclosure
 										key={key}
@@ -216,7 +234,7 @@ export default function AdminPage() {
 													<span className="mx-2 text-neutral-600" aria-hidden="true">
 														•
 													</span>
-													<span>{row.created_at ?? ''}</span>
+													<span>{createdAt}</span>
 												</p>
 											</>
 										}
@@ -304,7 +322,7 @@ export default function AdminPage() {
 
 											{isConfirmed ? (
 												<AdminField label={ta('confirmedAt')}>
-													<p>{row.confirmed_at}</p>
+													<p>{confirmedAt}</p>
 													{row.confirmed_by_steamid64 ? (
 														<p className="text-neutral-400">
 															{ta('confirmedBy', { steamid64: row.confirmed_by_steamid64 })}

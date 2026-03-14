@@ -17,7 +17,7 @@
   },
   "terms": {
     "title": "Terms of use",
-    "updatedAt": "Last updated: January 24, 2026",
+    "updatedAt": "Last updated: {date}",
     "intro": {
       "1": "These Terms of Use (“Terms”) govern access to and use of the Triad Tactics website (the “Site”). By accessing or using the Site, you agree to be bound by these Terms.",
       "2": "The Site is a non-commercial community website for players of the Arma video game. It exists solely to support participation in the community and is not offered as a source of factual or professional information."
@@ -742,6 +742,8 @@
     "passwordSecurityNotice": "Server passwords are confidential mission data. Sharing them with unauthorized people is forbidden and may result in penalties up to a permanent ban.",
     "passwordEarlyLabel": "Mod-download password",
     "passwordFinalLabel": "Gameplay password",
+    "copyValueAction": "Copy",
+    "copiedValueAction": "Copied",
     "passwordArchivedHidden": "Archived missions never show passwords.",
     "passwordRestrictedHidden": "Password is temporarily unavailable. Ask admins to verify mission password settings.",
     "statusTitle": "Mission status",
@@ -831,7 +833,9 @@
     "guideDontShowAgain": "Don't show this again",
     "guideClose": "Got it",
     "guideOpenButton": "Help",
-    "slottingRefresh": "Refresh"
+    "slottingRefresh": "Refresh",
+    "slottingFullscreenOpen": "Fullscreen",
+    "slottingFullscreenClose": "Exit fullscreen"
   },
   "welcome": {
     "applyButton": "Join Games",

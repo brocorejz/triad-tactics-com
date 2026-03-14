@@ -17,7 +17,7 @@
   },
   "terms": {
     "title": "Terms of use",
-    "updatedAt": "Last updated: January 24, 2026",
+    "updatedAt": "Последнее обновление: {date}",
     "intro": {
       "1": "These Terms of Use (“Terms”) govern access to and use of the Triad Tactics website (the “Site”). By accessing or using the Site, you agree to be bound by these Terms.",
       "2": "The Site is a non-commercial community website for players of the Arma video game. It exists solely to support participation in the community and is not offered as a source of factual or professional information."
@@ -742,6 +742,8 @@
     "passwordSecurityNotice": "Пароли сервера — конфиденциальные данные миссии. Передача их посторонним запрещена и может привести к наказанию вплоть до перманентного бана.",
     "passwordEarlyLabel": "Пароль для загрузки модов",
     "passwordFinalLabel": "Игровой пароль",
+    "copyValueAction": "Копировать",
+    "copiedValueAction": "Скопировано",
     "passwordArchivedHidden": "В архивных миссиях пароли не показываются.",
     "passwordRestrictedHidden": "Пароль временно недоступен. Попросите администраторов проверить настройки пароля миссии.",
     "statusTitle": "Статус миссии",
@@ -831,7 +833,9 @@
     "guideDontShowAgain": "Больше не показывать",
     "guideClose": "Понятно",
     "guideOpenButton": "Справка",
-    "slottingRefresh": "Обновить"
+    "slottingRefresh": "Обновить",
+    "slottingFullscreenOpen": "На весь экран",
+    "slottingFullscreenClose": "Выйти из полноэкранного режима"
   },
   "welcome": {
     "applyButton": "Присоединиться",

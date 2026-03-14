@@ -1,9 +1,14 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { formatLocalizedDate } from '@/platform/dateTime';
+
+const TERMS_UPDATED_AT = '2026-01-24';
 
 export default function TermsPage() {
 	const t = useTranslations('terms');
+	const locale = useLocale();
+	const updatedAt = formatLocalizedDate(TERMS_UPDATED_AT, { locale, timeZone: 'UTC', dateStyle: 'long' }) ?? TERMS_UPDATED_AT;
 	const responsibilityList = [
 		t('sections.responsibility.list.1'),
 		t('sections.responsibility.list.2'),
@@ -35,7 +40,7 @@ export default function TermsPage() {
 							{t('title')}
 						</h1>
 						<p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
-							{t('updatedAt')}
+							{t('updatedAt', { date: updatedAt })}
 						</p>
 						<p className="text-neutral-300">{t('intro.1')}</p>
 						<p className="text-neutral-300">{t('intro.2')}</p>

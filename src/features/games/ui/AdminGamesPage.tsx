@@ -15,22 +15,12 @@ import {
 } from '@/features/games/domain/api';
 import type { GameDraftCreateMode } from '@/features/games/domain/types';
 import type { AppLocale } from '@/i18n/locales';
+import { formatLocalizedDateTime, type ViewerHourCycle } from '@/platform/dateTime';
+import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 
 function buildLocalizedPath(locale: string, pathname: string) {
 	const suffix = pathname === '/' ? '' : pathname;
 	return `/${locale}${suffix}`;
-}
-
-function formatViewerDate(value: string | null, locale: string, timeZone: string | null): string | null {
-	if (!value || !timeZone) return null;
-	const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z';
-	const date = new Date(normalized);
-	if (Number.isNaN(date.getTime())) return null;
-	return new Intl.DateTimeFormat(locale, {
-		dateStyle: 'medium',
-		timeStyle: 'short',
-		timeZone
-	}).format(date);
 }
 
 function formatMissionStatus(mission: AdminGameMissionOverview, t: ReturnType<typeof useTranslations<'admin'>>): string {
@@ -106,14 +96,10 @@ export default function AdminGamesPage() {
 
 	const [status, setStatus] = useState<AdminStatus | null>(null);
 	const [overview, setOverview] = useState<AdminGamesOverviewView | null>(null);
-	const [timeZone, setTimeZone] = useState<string | null>(null);
+	const { timeZone, hourCycle } = useViewerDateTimePreferences();
 	const [creatingMode, setCreatingMode] = useState<GameDraftCreateMode | null>(null);
 	const [deletingDraft, setDeletingDraft] = useState(false);
 	const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
-
-	useEffect(() => {
-		setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
-	}, []);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -273,6 +259,7 @@ export default function AdminGamesPage() {
 										label={ta('gamesDraftCardTitle')}
 										emptyLabel={ta('gamesUntitledMission')}
 										timeZone={timeZone}
+										hourCycle={hourCycle}
 										locale={locale}
 										t={ta}
 										actions={
@@ -299,6 +286,7 @@ export default function AdminGamesPage() {
 										label={ta('gamesPublishedCardTitle')}
 										emptyLabel={ta('gamesUntitledMission')}
 										timeZone={timeZone}
+										hourCycle={hourCycle}
 										locale={locale}
 										t={ta}
 										actions={
@@ -352,6 +340,7 @@ export default function AdminGamesPage() {
 												label={ta('gamesArchivedCardTitle')}
 												emptyLabel={ta('gamesUntitledMission')}
 												timeZone={timeZone}
+												hourCycle={hourCycle}
 												locale={locale}
 												t={ta}
 												actions={
@@ -402,6 +391,7 @@ function GameOverviewCard({
 	emptyLabel,
 	locale,
 	timeZone,
+	hourCycle,
 	t,
 	actions
 }: {
@@ -410,15 +400,18 @@ function GameOverviewCard({
 	emptyLabel: string;
 	locale: string;
 	timeZone: string | null;
+	hourCycle: ViewerHourCycle | null;
 	t: ReturnType<typeof useTranslations<'admin'>>;
 	actions?: ReactNode;
 }) {
-	const startsAt = formatViewerDate(mission.startsAt, locale, timeZone);
-	const updatedAt = formatViewerDate(mission.updatedAt, locale, timeZone);
-	const publishedAt = formatViewerDate(mission.publishedAt, locale, timeZone);
-	const priorityOpensAt = formatViewerDate(mission.priorityClaimOpensAt, locale, timeZone);
-	const priorityReleasedAt = formatViewerDate(mission.priorityGameplayReleasedAt, locale, timeZone);
-	const regularReleasedAt = formatViewerDate(mission.regularGameplayReleasedAt, locale, timeZone);
+	const formatDateTime = (value: string | null) =>
+		formatLocalizedDateTime(value, { locale, timeZone, hourCycle, dateStyle: 'medium', timeStyle: 'short' });
+	const startsAt = formatDateTime(mission.startsAt);
+	const updatedAt = formatDateTime(mission.updatedAt);
+	const publishedAt = formatDateTime(mission.publishedAt);
+	const priorityOpensAt = formatDateTime(mission.priorityClaimOpensAt);
+	const priorityReleasedAt = formatDateTime(mission.priorityGameplayReleasedAt);
+	const regularReleasedAt = formatDateTime(mission.regularGameplayReleasedAt);
 	const archiveResult = formatArchiveResult(mission, t);
 	const archiveStatus = formatArchiveStatus(mission, t);
 

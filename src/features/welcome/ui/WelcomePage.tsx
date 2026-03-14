@@ -1,8 +1,10 @@
 import { useTranslations } from 'next-intl';
 import { CommunityLinks, MediaStrip } from '@/features/welcome/ui/root';
+import type { CurrentGameSummary } from '@/features/games/domain/types';
+import CurrentGameMissionCard from '@/features/games/ui/CurrentGameMissionCard';
 import type { MediaStripItem } from '@/features/welcome/ui/MediaStrip';
 
-export default function WelcomePage() {
+export default function WelcomePage({ currentGame }: { currentGame: CurrentGameSummary | null }) {
   const tw = useTranslations('welcome');
 
   const screenshots: MediaStripItem[] = [
@@ -13,6 +15,8 @@ export default function WelcomePage() {
 
   return (
     <section className="grid gap-8">
+      {currentGame ? <CurrentGameMissionCard current={currentGame} /> : null}
+
       <div className="rounded-2xl border border-neutral-800 bg-neutral-950 p-4 shadow-sm shadow-black/20 sm:p-6">
         <div className="space-y-4">
           <h2 className="text-xl font-semibold tracking-tight text-neutral-50 sm:text-2xl">{tw('community.title')}</h2>

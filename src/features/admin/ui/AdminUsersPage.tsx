@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { usePathname } from '@/i18n/routing';
 import { useParams } from 'next/navigation';
 import { parseAdminStatusResponse } from '@/features/admin/domain/api';
@@ -12,6 +12,8 @@ import {
 	type AdminUsersView
 } from '@/features/admin/domain/api';
 import type { AdminBadgeType, AdminUserBadge } from '@/features/admin/domain/types';
+import { formatLocalizedDateTime } from '@/platform/dateTime';
+import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 import {
 	AdminBadge,
 	AdminButton,
@@ -34,8 +36,10 @@ export default function AdminUsersPage() {
 	const ta = useTranslations('admin');
 	const pathname = usePathname();
 	const params = useParams();
-	const locale = (params.locale as string) || 'en';
-	const redirectPath = useMemo(() => buildLocalizedPath(locale, pathname), [locale, pathname]);
+	const routeLocale = (params.locale as string) || 'en';
+	const locale = useLocale();
+	const redirectPath = useMemo(() => buildLocalizedPath(routeLocale, pathname), [routeLocale, pathname]);
+	const { timeZone, hourCycle } = useViewerDateTimePreferences();
 
 	const [status, setStatus] = useState<AdminStatus | null>(null);
 	const [users, setUsers] = useState<AdminUsersView | null>(null);
@@ -275,11 +279,31 @@ export default function AdminUsersPage() {
 								const steamid64 = row.steamid64 ?? null;
 								const callsign = row.current_callsign ?? null;
 								const discordId = row.discord_id ?? null;
-								const createdAt = row.created_at ?? '';
+								const createdAt = formatLocalizedDateTime(row.created_at ?? null, {
+									locale,
+									timeZone,
+									hourCycle,
+									dateStyle: 'medium',
+									timeStyle: 'short'
+								}) ?? row.created_at ?? '';
 								const renameRequiredAt = row.rename_required_at ?? null;
+								const renameRequiredAtDisplay = formatLocalizedDateTime(renameRequiredAt, {
+									locale,
+									timeZone,
+									hourCycle,
+									dateStyle: 'medium',
+									timeStyle: 'short'
+								}) ?? renameRequiredAt;
 								const renameRequiredReason = row.rename_required_reason ?? null;
 								const renameRequiredBy = row.rename_required_by_steamid64 ?? null;
 								const confirmedAt = row.player_confirmed_at ?? null;
+								const confirmedAtDisplay = formatLocalizedDateTime(confirmedAt, {
+									locale,
+									timeZone,
+									hourCycle,
+									dateStyle: 'medium',
+									timeStyle: 'short'
+								}) ?? confirmedAt;
 								const hasPendingRename = row.has_pending_rename_request;
 								const canRequestRename = !!steamid64 && !!confirmedAt && !renameRequiredAt && !hasPendingRename;
 								return (
@@ -336,7 +360,7 @@ export default function AdminUsersPage() {
 											) : null}
 											{renameRequiredAt ? (
 												<AdminField label={ta('colRenameRequiredAt')}>
-													<p>{renameRequiredAt}</p>
+													<p>{renameRequiredAtDisplay}</p>
 												</AdminField>
 											) : null}
 											{renameRequiredReason ? (
@@ -351,7 +375,7 @@ export default function AdminUsersPage() {
 											) : null}
 											{confirmedAt ? (
 												<AdminField label={ta('colConfirmedAt')}>
-													<p>{confirmedAt}</p>
+													<p>{confirmedAtDisplay}</p>
 												</AdminField>
 											) : null}
 													<AdminField label={ta('userBadgesField')}>

@@ -1,4 +1,6 @@
-import { useCallback, useRef, type ReactNode } from 'react';
+'use client';
+
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { useTranslations } from 'next-intl';
 import type { CanonicalSlot } from '@/features/games/domain/slotting';
 import {
@@ -61,13 +63,46 @@ export function ConnectionSegment({
 	value,
 	label,
 	accent = false,
-	mono = false
+	mono = false,
+	copyValue,
+	copyLabel,
+	copiedLabel
 }: {
 	value: ReactNode;
 	label: string;
 	accent?: boolean;
 	mono?: boolean;
+	copyValue?: string | null;
+	copyLabel?: string;
+	copiedLabel?: string;
 }) {
+	const [copied, setCopied] = useState(false);
+	const resetCopyTimeoutRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (resetCopyTimeoutRef.current !== null) {
+				window.clearTimeout(resetCopyTimeoutRef.current);
+			}
+		};
+	}, []);
+
+	const handleCopy = async () => {
+		if (!copyValue) return;
+		if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+
+		try {
+			await navigator.clipboard.writeText(copyValue);
+			setCopied(true);
+			if (resetCopyTimeoutRef.current !== null) {
+				window.clearTimeout(resetCopyTimeoutRef.current);
+			}
+			resetCopyTimeoutRef.current = window.setTimeout(() => setCopied(false), 1_500);
+		} catch {
+			setCopied(false);
+		}
+	};
+
 	return (
 		<div
 			className={
@@ -79,7 +114,22 @@ export function ConnectionSegment({
 		>
 			<div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(210,184,83,0.15),transparent_60%)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 			<div className="relative grid gap-1.5">
-				<span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400 sm:text-xs">{label}</span>
+				<div className="flex flex-wrap items-start justify-between gap-2">
+					<span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400 sm:text-xs">{label}</span>
+					{copyValue && copyLabel && copiedLabel ? (
+						<button
+							type="button"
+							onClick={() => { void handleCopy(); }}
+							className="inline-flex items-center gap-1 rounded-md border border-neutral-700 bg-black/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-300 transition hover:bg-white/10 hover:text-neutral-100"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
+								<path d="M6 2.75A1.75 1.75 0 0 0 4.25 4.5v8.75c0 .966.784 1.75 1.75 1.75h7.25A1.75 1.75 0 0 0 15 13.25V4.5A1.75 1.75 0 0 0 13.25 2.75H6Z" />
+								<path d="M3.5 6A.75.75 0 0 1 4.25 6.75v8A1.75 1.75 0 0 0 6 16.5h6.75a.75.75 0 0 1 0 1.5H6A3.25 3.25 0 0 1 2.75 14.75v-8A.75.75 0 0 1 3.5 6Z" />
+							</svg>
+							{copied ? copiedLabel : copyLabel}
+						</button>
+					) : null}
+				</div>
 				<span className={`break-all text-lg font-semibold text-neutral-50 sm:text-xl ${mono ? 'font-mono tracking-[0.05em]' : ''}`}>
 					{value}
 				</span>

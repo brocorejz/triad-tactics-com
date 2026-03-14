@@ -2,6 +2,7 @@ import type { useTranslations } from 'next-intl';
 import type { CanonicalSlot, CanonicalSlotOccupant } from '@/features/games/domain/slotting';
 import { sideDisplayName } from '@/features/games/domain/slotting';
 import type { GameMissionDetail } from '@/features/games/domain/types';
+import { formatLocalizedDateTime, parseDateTimeValue, type ViewerHourCycle } from '@/platform/dateTime';
 
 export type MissionSide = GameMissionDetail['slotting']['sides'][number];
 
@@ -47,16 +48,14 @@ export function slottingTableWidthRem(squadCount: number): number {
 	return SLOTTING_INDEX_COLUMN_REM + squadCount * SLOTTING_SQUAD_COLUMN_REM;
 }
 
-export function formatViewerDate(value: string | null, locale: string, timeZone: string | null): string | null {
-	if (!value || !timeZone) return null;
-	const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z';
-	const date = new Date(normalized);
-	if (Number.isNaN(date.getTime())) return null;
-	return new Intl.DateTimeFormat(locale, {
+export function formatViewerDate(value: string | null, locale: string, timeZone: string | null, hourCycle: ViewerHourCycle | null): string | null {
+	return formatLocalizedDateTime(value, {
+		locale,
+		timeZone,
+		hourCycle,
 		dateStyle: 'full',
-		timeStyle: 'short',
-		timeZone
-	}).format(date);
+		timeStyle: 'short'
+	});
 }
 
 export function slotOccupantLabel(occupant: CanonicalSlotOccupant | null, t: ReturnType<typeof useTranslations<'games'>>): string {
@@ -75,7 +74,8 @@ export function missionStatusLabel(mission: GameMissionDetail, t: ReturnType<typ
 	if (mission.status === 'archived') {
 		return mission.archiveStatus === 'canceled' ? t('canceledBadge') : t('completedBadge');
 	}
-	return mission.startsAt && new Date(mission.startsAt).getTime() <= Date.now() ? t('currentBadge') : t('upcomingBadge');
+	const startsAt = mission.startsAt ? parseDateTimeValue(mission.startsAt) : null;
+	return startsAt && startsAt.getTime() <= Date.now() ? t('currentBadge') : t('upcomingBadge');
 }
 
 export function getCountdownParts(targetMs: number, nowMs: number) {

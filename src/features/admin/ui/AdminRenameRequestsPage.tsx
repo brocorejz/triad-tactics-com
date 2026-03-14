@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { usePathname } from '@/i18n/routing';
 import { useParams } from 'next/navigation';
 import { parseAdminStatusResponse } from '@/features/admin/domain/api';
 import { parseAdminRenameRequestsResponse, type AdminRenameRequestsView } from '@/features/admin/domain/api';
+import { formatLocalizedDateTime } from '@/platform/dateTime';
+import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 import {
 	AdminBadge,
 	AdminButton,
@@ -28,8 +30,10 @@ export default function AdminRenameRequestsPage() {
 	const ta = useTranslations('admin');
 	const pathname = usePathname();
 	const params = useParams();
-	const locale = (params.locale as string) || 'en';
-	const redirectPath = useMemo(() => buildLocalizedPath(locale, pathname), [locale, pathname]);
+	const routeLocale = (params.locale as string) || 'en';
+	const locale = useLocale();
+	const redirectPath = useMemo(() => buildLocalizedPath(routeLocale, pathname), [routeLocale, pathname]);
+	const { timeZone, hourCycle } = useViewerDateTimePreferences();
 
 	const [status, setStatus] = useState<AdminStatus | null>(null);
 	const [rows, setRows] = useState<AdminRenameRequestsView | null>(null);
@@ -171,7 +175,13 @@ export default function AdminRenameRequestsPage() {
 								const steamid64 = row.steamid64 ?? null;
 								const oldCallsign = row.old_callsign ?? '';
 								const newCallsign = row.new_callsign ?? '';
-								const createdAt = row.created_at ?? '';
+								const createdAt = formatLocalizedDateTime(row.created_at ?? null, {
+									locale,
+									timeZone,
+									hourCycle,
+									dateStyle: 'medium',
+									timeStyle: 'short'
+								}) ?? row.created_at ?? '';
 								const status = row.status;
 								const requestId = row.id ?? 0;
 								const statusLabel =

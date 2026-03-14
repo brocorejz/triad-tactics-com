@@ -18,6 +18,8 @@ import {
 } from '@/features/games/domain/api';
 import type { GameAuditEvent, GamePublishValidationError, GameSlottingDestructiveChange } from '@/features/games/domain/types';
 import { sideDisplayName } from '@/features/games/domain/slotting';
+import { formatLocalizedDateTime } from '@/platform/dateTime';
+import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 import { SlottingPreview } from './SlottingPreview';
 
 type SettingsFormState = {
@@ -58,18 +60,6 @@ function fromLocalInputValue(value: string) {
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return null;
 	return date.toISOString();
-}
-
-function formatViewerDate(value: string | null, locale: string, timeZone: string | null): string | null {
-	if (!value || !timeZone) return null;
-	const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z';
-	const date = new Date(normalized);
-	if (Number.isNaN(date.getTime())) return null;
-	return new Intl.DateTimeFormat(locale, {
-		dateStyle: 'medium',
-		timeStyle: 'short',
-		timeZone
-	}).format(date);
 }
 
 function formatErrorCode(code: string) {
@@ -223,7 +213,7 @@ export default function AdminGameMissionPage() {
 	const missionId = Number(missionIdParam);
 
 	const [status, setStatus] = useState<AdminStatus | null>(null);
-	const [timeZone, setTimeZone] = useState<string | null>(null);
+	const { timeZone, hourCycle } = useViewerDateTimePreferences();
 	const [mission, setMission] = useState<AdminGameMissionDetail | null>(null);
 	const [missionState, setMissionState] = useState<'loading' | 'ready' | 'not_found' | 'error'>('loading');
 	const [settingsForm, setSettingsForm] = useState<SettingsFormState | null>(null);
@@ -249,10 +239,6 @@ export default function AdminGameMissionPage() {
 		details: string;
 		onConfirm: () => void;
 	} | null>(null);
-
-	useEffect(() => {
-		setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
-	}, []);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -1101,7 +1087,7 @@ export default function AdminGameMissionPage() {
 																<div className="flex flex-wrap items-center justify-between gap-3">
 																	<div>
 																		<p className="text-sm font-semibold text-neutral-100">{event.eventType}</p>
-																		<p className="mt-1 text-xs text-neutral-500">{formatViewerDate(event.createdAt, locale, timeZone) ?? event.createdAt}</p>
+																		<p className="mt-1 text-xs text-neutral-500">{formatLocalizedDateTime(event.createdAt, { locale, timeZone, hourCycle, dateStyle: 'medium', timeStyle: 'short' }) ?? event.createdAt}</p>
 																	</div>
 																	<div className="text-xs text-neutral-400">
 																		{event.actorCallsign ?? event.actorSteamId64 ?? ta('gamesUnknownActor')}

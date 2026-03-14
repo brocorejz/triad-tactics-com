@@ -17,7 +17,7 @@
   },
   "terms": {
     "title": "Terms of use",
-    "updatedAt": "Last updated: January 24, 2026",
+    "updatedAt": "آخر تحديث: {date}",
     "intro": {
       "1": "These Terms of Use (“Terms”) govern access to and use of the Triad Tactics website (the “Site”). By accessing or using the Site, you agree to be bound by these Terms.",
       "2": "The Site is a non-commercial community website for players of the Arma video game. It exists solely to support participation in the community and is not offered as a source of factual or professional information."
@@ -742,6 +742,8 @@
     "passwordSecurityNotice": "كلمات مرور الخادم معلومات مهمة سرية. مشاركة هذه الكلمات مع أشخاص غير مصرح لهم ممنوعة وقد تؤدي إلى عقوبات تصل إلى الحظر الدائم.",
     "passwordEarlyLabel": "كلمة مرور تنزيل المودات",
     "passwordFinalLabel": "كلمة مرور اللعب",
+    "copyValueAction": "نسخ",
+    "copiedValueAction": "تم النسخ",
     "passwordArchivedHidden": "المهام المؤرشفة لا تعرض كلمات المرور أبداً.",
     "passwordRestrictedHidden": "كلمة المرور غير متاحة مؤقتًا. اطلب من المشرفين التحقق من إعدادات كلمة مرور المهمة.",
     "statusTitle": "حالة المهمة",
@@ -831,7 +833,9 @@
     "guideDontShowAgain": "لا تعرض هذا مجدداً",
     "guideClose": "فهمت",
     "guideOpenButton": "مساعدة",
-    "slottingRefresh": "تحديث"
+    "slottingRefresh": "تحديث",
+    "slottingFullscreenOpen": "ملء الشاشة",
+    "slottingFullscreenClose": "الخروج من ملء الشاشة"
   },
   "welcome": {
     "applyButton": "انضم للألعاب",

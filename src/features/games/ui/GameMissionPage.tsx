@@ -7,6 +7,9 @@ import type { GameArchiveResult, GameArchiveStatus, GameMissionDetail } from '@/
 import type { AppLocale } from '@/i18n/locales';
 import { sideDisplayName } from '@/features/games/domain/slotting';
 import { useRouter } from '@/i18n/routing';
+import { formatTimeZoneDisplay, parseDateTimeValue } from '@/platform/dateTime';
+import { useCurrentTime } from '@/platform/useCurrentTime';
+import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 import {
 	SLOTTING_INDEX_COLUMN_REM,
 	SLOTTING_SQUAD_COLUMN_REM,
@@ -31,26 +34,19 @@ import { useMissionGuide, MissionGuideModal } from './MissionGuideModal';
 export default function GameMissionPage({ mission }: { mission: GameMissionDetail }) {
 	const t = useTranslations('games');
 	const locale = useLocale();
-	const [timeZone, setTimeZone] = useState<string | null>(null);
-	const [now, setNow] = useState<number | null>(null);
+	const { timeZone, hourCycle } = useViewerDateTimePreferences();
+	const now = useCurrentTime();
 	const { actionError, clearActionError, pendingActionId, busy, runAction } = useMissionActions(t);
 	const [pendingConfirm, setPendingConfirm] = useState<{ kind: 'switch' | 'leave'; action: () => void } | null>(null);
 	const guide = useMissionGuide();
 
-	useEffect(() => {
-		setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'); // eslint-disable-line react-hooks/set-state-in-effect
-		setNow(Date.now());
-		const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-		return () => window.clearInterval(timer);
-	}, []);
-
-	const startDate = mission.startsAt ? new Date(mission.startsAt) : null;
+	const startDate = mission.startsAt ? parseDateTimeValue(mission.startsAt) : null;
 	const startValid = startDate !== null && !Number.isNaN(startDate.getTime());
 	const startTimestamp = startValid ? startDate.getTime() : null;
 	const countdown = now !== null && startTimestamp !== null && startTimestamp > now ? getCountdownParts(startTimestamp, now) : null;
 	const isMissionLive = mission.status === 'published' && startTimestamp !== null && now !== null ? startTimestamp <= now : false;
-	const startsAt = formatViewerDate(mission.startsAt, locale, timeZone);
-	const archivedAt = formatViewerDate(mission.archivedAt, locale, timeZone);
+	const startsAt = formatViewerDate(mission.startsAt, locale, timeZone, hourCycle);
+	const archivedAt = formatViewerDate(mission.archivedAt, locale, timeZone, hourCycle);
 	const heldSlotSummary = findHeldSlotSummary(mission.slotting, mission.viewer.heldSlotId);
 	const slottingSummary = buildSlottingSummary(mission.slotting, mission.viewer.heldSlotId);
 
@@ -206,7 +202,7 @@ function HeroSection({
 				? `${t('startsAtLabel')}: ${startsAt}`
 				: null;
 
-	const timeZoneDisplay = timeZone ? timeZone.replace(/\//g, ' / ') : null;
+	const timeZoneDisplay = formatTimeZoneDisplay(timeZone);
 	const missionBriefing = (mission.description[locale as AppLocale] || mission.description.en) || t('missionDescriptionFallback');
 
 	return (
@@ -284,6 +280,8 @@ function ServerSection({
 	const serverHostDisplay = mission.serverHost || t('serverPortUnknown');
 	const serverPortDisplay = mission.serverPort !== null ? String(mission.serverPort) : t('serverPortUnknown');
 	const passwordStageLabel = mission.password.stage === 'final' ? t('passwordFinalLabel') : t('passwordEarlyLabel');
+	const copyLabel = t('copyValueAction');
+	const copiedLabel = t('copiedValueAction');
 
 	return (
 		<section className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-gradient-to-br from-neutral-950 via-neutral-950 to-neutral-900 p-5 shadow-sm shadow-black/20 sm:p-6">
@@ -312,15 +310,15 @@ function ServerSection({
 						<div className="space-y-3">
 							<p className="max-w-4xl text-sm text-neutral-300">{t('directConnectSubtitle')}</p>
 							<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-								<ConnectionSegment label={t('serverAddressLabel')} value={serverHostDisplay} />
-								<ConnectionSegment label={t('serverPortLabel')} value={serverPortDisplay} mono />
+								<ConnectionSegment label={t('serverAddressLabel')} value={serverHostDisplay} copyValue={mission.serverHost || null} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+								<ConnectionSegment label={t('serverPortLabel')} value={serverPortDisplay} mono copyValue={mission.serverPort !== null ? String(mission.serverPort) : null} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 							</div>
 						</div>
 
 						<div className="grid gap-3">
 							<p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-500">{t('passwordTitle')}</p>
 							{mission.password.value ? (
-								<ConnectionSegment label={passwordStageLabel} value={mission.password.value} accent mono />
+								<ConnectionSegment label={passwordStageLabel} value={mission.password.value} accent mono copyValue={mission.password.value} copyLabel={copyLabel} copiedLabel={copiedLabel} />
 							) : (
 								<div className="rounded-2xl border border-neutral-800 bg-neutral-950/70 px-4 py-3">
 									<p className="text-sm leading-7 text-neutral-300">
@@ -648,29 +646,42 @@ function SlottingSection({
 }) {
 	const router = useRouter();
 	const [isRefreshing, startRefresh] = useTransition();
+	const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
 	const canLeavePrioritySlot = mission.status === 'published' && mission.viewer.heldSlotAccess === 'priority';
+	const refreshSlotting = () => startRefresh(() => router.refresh());
 
 	return (
+		<>
 		<section className="overflow-hidden rounded-3xl border border-neutral-800 bg-neutral-950 p-5 shadow-sm shadow-black/20 sm:p-6">
 			<div className="flex flex-wrap items-end justify-between gap-4">
 				<div>
 					<h3 className="text-lg font-semibold tracking-tight text-neutral-50">{t('slottingTitle')}</h3>
 					<p className="mt-1 text-sm text-neutral-300">{t('slottingSubtitle')}</p>
 				</div>
-				<div className="flex items-center gap-2">
+				<div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
 					<HelpButton onClick={guideShow} label={t('guideOpenButton')} />
 					<button
 						type="button"
 						disabled={isRefreshing}
-						onClick={() => startRefresh(() => router.refresh())}
-						className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-60"
+						onClick={refreshSlotting}
+						className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:w-auto"
 					>
 						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`h-3.5 w-3.5${isRefreshing ? ' animate-spin' : ''}`}>
 							<path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H4.598a.75.75 0 00-.75.75v3.634a.75.75 0 001.5 0v-2.033l.312.311a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm-10.624-3.85a5.5 5.5 0 019.201-2.465l.312.31H11.77a.75.75 0 000 1.5h3.634a.75.75 0 00.75-.75V2.535a.75.75 0 00-1.5 0v2.033l-.312-.311A7 7 0 002.63 7.395a.75.75 0 101.449.39z" clipRule="evenodd" />
 						</svg>
 						{t('slottingRefresh')}
 					</button>
-					<span className="inline-flex items-center rounded-full border border-neutral-800 bg-white/[0.03] px-3 py-1.5 text-sm font-semibold text-neutral-300">
+					<button
+						type="button"
+						onClick={() => setIsFullscreenOpen(true)}
+						className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100 sm:min-h-0 sm:w-auto"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+							<path d="M3.75 3A.75.75 0 0 0 3 3.75v3.5a.75.75 0 0 0 1.5 0V5.56l3.22 3.22a.75.75 0 1 0 1.06-1.06L5.56 4.5h1.69a.75.75 0 0 0 0-1.5h-3.5Zm9 0a.75.75 0 0 0 0 1.5h1.69l-3.22 3.22a.75.75 0 1 0 1.06 1.06l3.22-3.22v1.69a.75.75 0 0 0 1.5 0v-3.5A.75.75 0 0 0 16.25 3h-3.5ZM8.78 11.22a.75.75 0 0 0-1.06 0L4.5 14.44v-1.69a.75.75 0 0 0-1.5 0v3.5c0 .414.336.75.75.75h3.5a.75.75 0 0 0 0-1.5H5.56l3.22-3.22a.75.75 0 0 0 0-1.06Zm2.44 0a.75.75 0 0 0 0 1.06l3.22 3.22h-1.69a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 .75-.75v-3.5a.75.75 0 0 0-1.5 0v1.69l-3.22-3.22a.75.75 0 0 0-1.06 0Z" />
+						</svg>
+						{t('slottingFullscreenOpen')}
+					</button>
+					<span className="inline-flex min-h-11 w-full items-center justify-center whitespace-nowrap rounded-full border border-neutral-800 bg-white/[0.03] px-3 py-1.5 text-sm font-semibold text-neutral-300 sm:min-h-0 sm:w-auto">
 						{t('priorityAvailability', { count: mission.availablePrioritySlotCount })}
 					</span>
 				</div>
@@ -717,125 +728,15 @@ function SlottingSection({
 				</div>
 			</div>
 
-			<div className="mt-6 grid gap-6">
-				{mission.slotting.sides.map((side) => {
-					const sideRows = buildSideRows(side);
-					const boardWidthRem = slottingTableWidthRem(side.squads.length);
-
-					return (
-						<section
-							key={side.id}
-							className="overflow-hidden rounded-3xl border bg-white/[0.02]"
-							style={{ borderColor: `${side.color}55` }}
-						>
-							<div className="flex items-center gap-3 border-b border-neutral-800/80 px-4 py-4">
-								<span className="h-3 w-3 rounded-full" style={{ backgroundColor: side.color }} />
-								<h4 className="text-lg font-semibold text-neutral-50">{sideDisplayName(side)}</h4>
-							</div>
-
-							<SyncedHorizontalScroll contentWidthRem={boardWidthRem}>
-								<table className="table-fixed border-separate border-spacing-0" style={{ width: `${boardWidthRem}rem` }}>
-									<colgroup>
-										<col style={{ width: `${SLOTTING_INDEX_COLUMN_REM}rem` }} />
-										{side.squads.map((squad) => (
-											<col key={`col-${squad.id}`} style={{ width: `${SLOTTING_SQUAD_COLUMN_REM}rem` }} />
-										))}
-									</colgroup>
-									<thead>
-										<tr>
-											<th className="sticky left-0 z-20 w-14 border-b border-r border-neutral-800 bg-neutral-950 px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
-												#
-											</th>
-											{side.squads.map((squad) => (
-												<th key={squad.id} className="border-b border-neutral-800 bg-neutral-950/80 px-3 py-3 text-left align-bottom">
-													<div className="text-sm font-semibold uppercase tracking-[0.2em] text-neutral-300">{squad.name}</div>
-												</th>
-											))}
-										</tr>
-									</thead>
-									<tbody>
-										{sideRows.map((row) => (
-											<tr key={`${side.id}-${row.index}`}>
-												<th className="sticky left-0 z-10 w-14 border-r border-t border-neutral-800 bg-neutral-950 px-3 py-4 text-left align-top text-xs font-semibold uppercase tracking-[0.2em] text-neutral-600">
-													{String(row.index + 1).padStart(2, '0')}
-												</th>
-												{row.slots.map((slot, squadIndex) => {
-													if (!slot) {
-														return (
-															<td key={`${side.id}-${row.index}-${squadIndex}`} className="border-t border-neutral-800 p-2 align-top">
-																<div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-neutral-800 bg-black/10 text-lg text-neutral-700">
-																	-
-																</div>
-															</td>
-														);
-													}
-
-													const canClaim =
-														mission.status === 'published' &&
-														slot.access === 'priority' &&
-														slot.occupant === null &&
-														mission.viewer.canClaimPriority;
-													const canSwitch =
-														mission.status === 'published' &&
-														slot.access === 'priority' &&
-														slot.occupant === null &&
-														mission.viewer.canSwitchPriority;
-
-													return (
-														<td key={slot.id} className="border-t border-neutral-800 p-2 align-top">
-															<SlotCell
-																slot={slot}
-																isHeldByViewer={mission.viewer.heldSlotId === slot.id}
-																canClaim={canClaim}
-																canSwitch={canSwitch}
-																canLeave={
-																	mission.status === 'published' &&
-																	mission.viewer.heldSlotAccess === 'priority' &&
-																	mission.viewer.heldSlotId === slot.id
-																}
-																isBusy={busy && pendingActionId === slot.id}
-																isLeaveBusy={busy && pendingActionId === 'leave-slot'}
-																disableActions={busy}
-																onClaim={() => {
-																	void runAction({
-																		id: slot.id,
-																		path: `/api/games/${mission.shortCode}/claim`,
-																		body: { slotId: slot.id }
-																	});
-																}}
-																onSwitch={() => {
-																	confirmAction({
-																		kind: 'switch',
-																		action: () => void runAction({
-																			id: slot.id,
-																			path: `/api/games/${mission.shortCode}/switch-slot`,
-																			body: { slotId: slot.id }
-																		})
-																	});
-																}}
-																onLeave={() => {
-																	confirmAction({
-																		kind: 'leave',
-																		action: () => void runAction({
-																			id: 'leave-slot',
-																			path: `/api/games/${mission.shortCode}/leave-slot`
-																		})
-																	});
-																}}
-																t={t}
-															/>
-														</td>
-													);
-												})}
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</SyncedHorizontalScroll>
-						</section>
-					);
-				})}
-			</div>
+			<SlottingBoards
+				mission={mission}
+				busy={busy}
+				pendingActionId={pendingActionId}
+				runAction={runAction}
+				confirmAction={confirmAction}
+				t={t}
+				className="mt-6 grid gap-6"
+			/>
 
 			<div className="mt-8 grid gap-3">
 				<div>
@@ -922,6 +823,253 @@ function SlottingSection({
 				</div>
 			</div>
 		</section>
+
+		{isFullscreenOpen && typeof document !== 'undefined'
+			? createPortal(
+				<SlottingFullscreenOverlay
+					mission={mission}
+					busy={busy}
+					pendingActionId={pendingActionId}
+					runAction={runAction}
+					confirmAction={confirmAction}
+					isRefreshing={isRefreshing}
+					onRefresh={refreshSlotting}
+					onClose={() => setIsFullscreenOpen(false)}
+					t={t}
+				/>,
+				document.body
+			)
+			: null}
+		</>
+	);
+}
+
+function SlottingBoards({
+	mission,
+	busy,
+	pendingActionId,
+	runAction,
+	confirmAction,
+	t,
+	className = 'grid gap-6'
+}: {
+	mission: GameMissionDetail;
+	busy: boolean;
+	pendingActionId: string | null;
+	runAction: RunAction;
+	confirmAction: (pending: { kind: 'switch' | 'leave'; action: () => void }) => void;
+	t: ReturnType<typeof useTranslations<'games'>>;
+	className?: string;
+}) {
+	return (
+		<div className={className}>
+			{mission.slotting.sides.map((side) => {
+				const sideRows = buildSideRows(side);
+				const boardWidthRem = slottingTableWidthRem(side.squads.length);
+
+				return (
+					<section
+						key={side.id}
+						className="overflow-hidden rounded-3xl border bg-white/[0.02]"
+						style={{ borderColor: `${side.color}55` }}
+					>
+						<div className="flex items-center gap-3 border-b border-neutral-800/80 px-4 py-4">
+							<span className="h-3 w-3 rounded-full" style={{ backgroundColor: side.color }} />
+							<h4 className="text-lg font-semibold text-neutral-50">{sideDisplayName(side)}</h4>
+						</div>
+
+						<SyncedHorizontalScroll contentWidthRem={boardWidthRem}>
+							<table className="table-fixed border-separate border-spacing-0" style={{ width: `${boardWidthRem}rem` }}>
+								<colgroup>
+									<col style={{ width: `${SLOTTING_INDEX_COLUMN_REM}rem` }} />
+									{side.squads.map((squad) => (
+										<col key={`col-${squad.id}`} style={{ width: `${SLOTTING_SQUAD_COLUMN_REM}rem` }} />
+									))}
+								</colgroup>
+								<thead>
+									<tr>
+										<th className="sticky left-0 z-20 w-14 border-b border-r border-neutral-800 bg-neutral-950 px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
+											#
+										</th>
+										{side.squads.map((squad) => (
+											<th key={squad.id} className="border-b border-neutral-800 bg-neutral-950/80 px-3 py-3 text-left align-bottom">
+												<div className="text-sm font-semibold uppercase tracking-[0.2em] text-neutral-300">{squad.name}</div>
+											</th>
+										))}
+									</tr>
+								</thead>
+								<tbody>
+									{sideRows.map((row) => (
+										<tr key={`${side.id}-${row.index}`}>
+											<th className="sticky left-0 z-10 w-14 border-r border-t border-neutral-800 bg-neutral-950 px-3 py-4 text-left align-top text-xs font-semibold uppercase tracking-[0.2em] text-neutral-600">
+												{String(row.index + 1).padStart(2, '0')}
+											</th>
+											{row.slots.map((slot, squadIndex) => {
+												if (!slot) {
+													return (
+														<td key={`${side.id}-${row.index}-${squadIndex}`} className="border-t border-neutral-800 p-2 align-top">
+															<div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-neutral-800 bg-black/10 text-lg text-neutral-700">
+																-
+															</div>
+														</td>
+													);
+												}
+
+												const canClaim =
+													mission.status === 'published' &&
+													slot.access === 'priority' &&
+													slot.occupant === null &&
+													mission.viewer.canClaimPriority;
+												const canSwitch =
+													mission.status === 'published' &&
+													slot.access === 'priority' &&
+													slot.occupant === null &&
+													mission.viewer.canSwitchPriority;
+
+												return (
+													<td key={slot.id} className="border-t border-neutral-800 p-2 align-top">
+														<SlotCell
+															slot={slot}
+															isHeldByViewer={mission.viewer.heldSlotId === slot.id}
+															canClaim={canClaim}
+															canSwitch={canSwitch}
+															canLeave={
+																mission.status === 'published' &&
+																mission.viewer.heldSlotAccess === 'priority' &&
+																mission.viewer.heldSlotId === slot.id
+															}
+															isBusy={busy && pendingActionId === slot.id}
+															isLeaveBusy={busy && pendingActionId === 'leave-slot'}
+															disableActions={busy}
+															onClaim={() => {
+																void runAction({
+																	id: slot.id,
+																	path: `/api/games/${mission.shortCode}/claim`,
+																	body: { slotId: slot.id }
+																});
+															}}
+															onSwitch={() => {
+																confirmAction({
+																	kind: 'switch',
+																	action: () => void runAction({
+																		id: slot.id,
+																		path: `/api/games/${mission.shortCode}/switch-slot`,
+																		body: { slotId: slot.id }
+																	})
+																});
+															}}
+															onLeave={() => {
+																confirmAction({
+																	kind: 'leave',
+																	action: () => void runAction({
+																		id: 'leave-slot',
+																		path: `/api/games/${mission.shortCode}/leave-slot`
+																	})
+																});
+															}}
+															t={t}
+														/>
+													</td>
+												);
+											})}
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</SyncedHorizontalScroll>
+					</section>
+				);
+			})}
+		</div>
+	);
+}
+
+function SlottingFullscreenOverlay({
+	mission,
+	busy,
+	pendingActionId,
+	runAction,
+	confirmAction,
+	isRefreshing,
+	onRefresh,
+	onClose,
+	t
+}: {
+	mission: GameMissionDetail;
+	busy: boolean;
+	pendingActionId: string | null;
+	runAction: RunAction;
+	confirmAction: (pending: { kind: 'switch' | 'leave'; action: () => void }) => void;
+	isRefreshing: boolean;
+	onRefresh: () => void;
+	onClose: () => void;
+	t: ReturnType<typeof useTranslations<'games'>>;
+}) {
+	useEffect(() => {
+		const previousOverflow = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') onClose();
+		};
+
+		window.addEventListener('keydown', handleKeyDown);
+		return () => {
+			document.body.style.overflow = previousOverflow;
+			window.removeEventListener('keydown', handleKeyDown);
+		};
+	}, [onClose]);
+
+	return (
+		<div role="dialog" aria-modal="true" aria-labelledby="slotting-fullscreen-title" className="fixed inset-0 z-[90] bg-black/85 backdrop-blur-sm">
+			<div className="flex h-full flex-col bg-neutral-950/95">
+				<div className="border-b border-neutral-800 px-4 py-4 sm:px-6">
+					<div className="flex flex-wrap items-end justify-between gap-4">
+						<div>
+							<h3 id="slotting-fullscreen-title" className="text-lg font-semibold tracking-tight text-neutral-50">{t('slottingTitle')}</h3>
+							<p className="mt-1 text-sm text-neutral-300">{t('slottingSubtitle')}</p>
+						</div>
+						<div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
+							<button
+								type="button"
+								disabled={isRefreshing}
+								onClick={onRefresh}
+								className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:w-auto"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={`h-3.5 w-3.5${isRefreshing ? ' animate-spin' : ''}`}>
+									<path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H4.598a.75.75 0 00-.75.75v3.634a.75.75 0 001.5 0v-2.033l.312.311a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm-10.624-3.85a5.5 5.5 0 019.201-2.465l.312.31H11.77a.75.75 0 000 1.5h3.634a.75.75 0 00.75-.75V2.535a.75.75 0 00-1.5 0v2.033l-.312-.311A7 7 0 002.63 7.395a.75.75 0 101.449.39z" clipRule="evenodd" />
+								</svg>
+								{t('slottingRefresh')}
+							</button>
+							<span className="inline-flex min-h-11 w-full items-center justify-center whitespace-nowrap rounded-full border border-neutral-800 bg-white/[0.03] px-3 py-1.5 text-sm font-semibold text-neutral-300 sm:min-h-0 sm:w-auto">
+								{t('priorityAvailability', { count: mission.availablePrioritySlotCount })}
+							</span>
+							<button
+								type="button"
+								onClick={onClose}
+								className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-neutral-300 transition hover:bg-neutral-800 hover:text-neutral-100 sm:min-h-0 sm:w-auto"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+									<path fillRule="evenodd" d="M4.22 4.22a.75.75 0 0 1 1.06 0L10 8.94l4.72-4.72a.75.75 0 1 1 1.06 1.06L11.06 10l4.72 4.72a.75.75 0 1 1-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 0 1-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+								</svg>
+								{t('slottingFullscreenClose')}
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6">
+					<SlottingBoards
+						mission={mission}
+						busy={busy}
+						pendingActionId={pendingActionId}
+						runAction={runAction}
+						confirmAction={confirmAction}
+						t={t}
+					/>
+				</div>
+			</div>
+		</div>
 	);
 }
 
