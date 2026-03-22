@@ -15,6 +15,8 @@ import {
 	deleteArchivedMissionDeps,
 	getAdminGameMissionDeps,
 	getMissionAuditDeps,
+	hidePriorityGameplayDeps,
+	hideRegularGameplayDeps,
 	importGameSlottingDeps,
 	publishGameDeps,
 	releasePriorityGameplayDeps,
@@ -27,6 +29,8 @@ import { cancelGame } from '@/features/games/useCases/cancelGame';
 import { deleteArchivedMission } from '@/features/games/useCases/deleteArchivedMission';
 import { getAdminGameMission } from '@/features/games/useCases/getAdminGameMission';
 import { getMissionAuditHistory } from '@/features/games/useCases/getMissionAuditHistory';
+import { hidePriorityGameplay } from '@/features/games/useCases/hidePriorityGameplay';
+import { hideRegularGameplay } from '@/features/games/useCases/hideRegularGameplay';
 import { importGameSlotting } from '@/features/games/useCases/importGameSlotting';
 import { publishGame } from '@/features/games/useCases/publishGame';
 import { releasePriorityGameplay } from '@/features/games/useCases/releasePriorityGameplay';
@@ -411,6 +415,64 @@ export async function postAdminGameReleaseRegularRoute(
 		return NextResponse.json({ success: true, mission: released.mission });
 	} catch (error: unknown) {
 		logger.error({ ...errorToLogObject(error) }, 'admin_game_release_regular_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGameHidePriorityRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const hidden = hidePriorityGameplay(hidePriorityGameplayDeps, {
+			missionId,
+			hiddenBySteamId64: admin.identity.steamid64
+		});
+
+		if (!hidden.ok) {
+			return mapGameplayReleaseError(hidden);
+		}
+
+		return NextResponse.json({ success: true, mission: hidden.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_hide_priority_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGameHideRegularRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const hidden = hideRegularGameplay(hideRegularGameplayDeps, {
+			missionId,
+			hiddenBySteamId64: admin.identity.steamid64
+		});
+
+		if (!hidden.ok) {
+			return mapGameplayReleaseError(hidden);
+		}
+
+		return NextResponse.json({ success: true, mission: hidden.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_hide_regular_failed');
 		return NextResponse.json({ error: 'server_error' }, { status: 500 });
 	}
 }

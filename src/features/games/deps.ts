@@ -11,6 +11,8 @@ import {
 	getAdminGamesOverview,
 	getCurrentPublishedSummary,
 	getMissionAuditHistory,
+	hidePriorityGameplay,
+	hideRegularGameplay,
 	importSlotting,
 	joinRegularGame,
 	leavePrioritySlot,
@@ -35,6 +37,8 @@ import type {
 	GetAdminGamesOverviewDeps,
 	GetCurrentGameDeps,
 	GetMissionAuditDeps,
+	HidePriorityGameplayDeps,
+	HideRegularGameplayDeps,
 	ImportGameSlottingDeps,
 	JoinRegularGameDeps,
 	LeavePrioritySlotDeps,
@@ -92,6 +96,18 @@ export const releasePriorityGameplayDeps: ReleasePriorityGameplayDeps = {
 export const releaseRegularGameplayDeps: ReleaseRegularGameplayDeps = {
 	repo: {
 		releaseRegularGameplay
+	}
+};
+
+export const hidePriorityGameplayDeps: HidePriorityGameplayDeps = {
+	repo: {
+		hidePriorityGameplay
+	}
+};
+
+export const hideRegularGameplayDeps: HideRegularGameplayDeps = {
+	repo: {
+		hideRegularGameplay
 	}
 };
 

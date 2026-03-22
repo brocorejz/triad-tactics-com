@@ -9,8 +9,10 @@ async function loadAdminGameReleaseHarness() {
 	const { dbOperations } = await import('../../../../fixtures/dbOperations');
 	const { POST: POST_RELEASE_PRIORITY } = await import('@/app/api/admin/games/[missionId]/release-priority/route');
 	const { POST: POST_RELEASE_REGULAR } = await import('@/app/api/admin/games/[missionId]/release-regular/route');
+	const { POST: POST_HIDE_PRIORITY } = await import('@/app/api/admin/games/[missionId]/hide-priority/route');
+	const { POST: POST_HIDE_REGULAR } = await import('@/app/api/admin/games/[missionId]/hide-regular/route');
 	const { NextRequest } = await import('next/server');
-	return { dbOperations, POST_RELEASE_PRIORITY, POST_RELEASE_REGULAR, NextRequest };
+	return { dbOperations, POST_RELEASE_PRIORITY, POST_RELEASE_REGULAR, POST_HIDE_PRIORITY, POST_HIDE_REGULAR, NextRequest };
 }
 
 function missionRouteContext(missionId: number | string) {
@@ -273,5 +275,95 @@ describe('Admin game release endpoints (integration)', () => {
 
 		expect(res.status).toBe(409);
 		expect(await res.json()).toEqual({ error: 'priority_release_required' });
+	});
+
+	it('hides regular gameplay password after release', async () => {
+		const { dbOperations, POST_HIDE_REGULAR, NextRequest } = await loadAdminGameReleaseHarness();
+		const missionId = insertPublishedMission({
+			shortCode: 'OP-HIDE-REGULAR',
+			priorityGameplayReleasedAt: '2026-03-20T19:10:00.000Z',
+			regularGameplayReleasedAt: '2026-03-20T19:20:00.000Z'
+		});
+		const adminSid = createSteamSession(dbOperations, {
+			steamid64: ADMIN_STEAM_ID,
+			redirectPath: '/en/admin/games'
+		});
+
+		const res = await POST_HIDE_REGULAR(
+			new NextRequest(`http://localhost/api/admin/games/${missionId}/hide-regular`, {
+				method: 'POST',
+				headers: {
+					origin: 'http://localhost',
+					cookie: `tt_steam_session=${adminSid}`
+				}
+			}),
+			missionRouteContext(missionId)
+		);
+
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.mission.regularGameplayReleasedAt).toBeNull();
+
+		const row = getDb()
+			.prepare('SELECT regular_gameplay_released_at FROM missions WHERE id = ? LIMIT 1')
+			.get(missionId) as { regular_gameplay_released_at: string | null };
+		expect(row.regular_gameplay_released_at).toBeNull();
+	});
+
+	it('requires hiding regular password before hiding priority password', async () => {
+		const { dbOperations, POST_HIDE_PRIORITY, NextRequest } = await loadAdminGameReleaseHarness();
+		const missionId = insertPublishedMission({
+			shortCode: 'OP-HIDE-PRIORITY-BLOCKED',
+			priorityGameplayReleasedAt: '2026-03-20T19:10:00.000Z',
+			regularGameplayReleasedAt: '2026-03-20T19:20:00.000Z'
+		});
+		const adminSid = createSteamSession(dbOperations, {
+			steamid64: ADMIN_STEAM_ID,
+			redirectPath: '/en/admin/games'
+		});
+
+		const res = await POST_HIDE_PRIORITY(
+			new NextRequest(`http://localhost/api/admin/games/${missionId}/hide-priority`, {
+				method: 'POST',
+				headers: {
+					origin: 'http://localhost',
+					cookie: `tt_steam_session=${adminSid}`
+				}
+			}),
+			missionRouteContext(missionId)
+		);
+
+		expect(res.status).toBe(409);
+		expect(await res.json()).toEqual({ error: 'regular_release_hide_required' });
+	});
+
+	it('hides priority password when regular release is already hidden', async () => {
+		const { dbOperations, POST_HIDE_PRIORITY, NextRequest } = await loadAdminGameReleaseHarness();
+		const missionId = insertPublishedMission({
+			shortCode: 'OP-HIDE-PRIORITY',
+			priorityGameplayReleasedAt: '2026-03-20T19:10:00.000Z',
+			regularGameplayReleasedAt: null
+		});
+		const adminSid = createSteamSession(dbOperations, {
+			steamid64: ADMIN_STEAM_ID,
+			redirectPath: '/en/admin/games'
+		});
+
+		const res = await POST_HIDE_PRIORITY(
+			new NextRequest(`http://localhost/api/admin/games/${missionId}/hide-priority`, {
+				method: 'POST',
+				headers: {
+					origin: 'http://localhost',
+					cookie: `tt_steam_session=${adminSid}`
+				}
+			}),
+			missionRouteContext(missionId)
+		);
+
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.mission.priorityGameplayReleasedAt).toBeNull();
 	});
 });

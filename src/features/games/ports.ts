@@ -75,6 +75,25 @@ export type ReleaseRegularGameplayRepoResult =
 				| 'database_error';
 	  };
 
+export type HidePriorityGameplayRepoResult =
+	| { success: true; mission: GameAdminMission }
+	| {
+			success: false;
+			error:
+				| 'not_found'
+				| 'not_published'
+				| 'regular_release_hide_required'
+				| 'already_hidden'
+				| 'database_error';
+	  };
+
+export type HideRegularGameplayRepoResult =
+	| { success: true; mission: GameAdminMission }
+	| {
+			success: false;
+			error: 'not_found' | 'not_published' | 'already_hidden' | 'database_error';
+	  };
+
 export type ArchiveGameRepoResult =
 	| { success: true; mission: GameAdminMission }
 	| {
@@ -220,6 +239,8 @@ export type GamesDraftRepo = {
 	publishMission: (input: PublishGameRequest & { missionId: number; publishedBySteamId64: string }) => PublishGameRepoResult;
 	releasePriorityGameplay: (input: { missionId: number; releasedBySteamId64: string }) => ReleasePriorityGameplayRepoResult;
 	releaseRegularGameplay: (input: { missionId: number; releasedBySteamId64: string }) => ReleaseRegularGameplayRepoResult;
+	hidePriorityGameplay: (input: { missionId: number; hiddenBySteamId64: string }) => HidePriorityGameplayRepoResult;
+	hideRegularGameplay: (input: { missionId: number; hiddenBySteamId64: string }) => HideRegularGameplayRepoResult;
 	archiveGame: (input: ArchiveGameRequest & { missionId: number; archivedBySteamId64: string }) => ArchiveGameRepoResult;
 	cancelGame: (input: CancelGameRequest & { missionId: number; archivedBySteamId64: string }) => CancelGameRepoResult;
 	deleteArchivedMission: (input: DeleteArchivedMissionRequest & { missionId: number }) => DeleteArchivedMissionRepoResult;
@@ -268,6 +289,14 @@ export type ReleasePriorityGameplayDeps = {
 
 export type ReleaseRegularGameplayDeps = {
 	repo: Pick<GamesDraftRepo, 'releaseRegularGameplay'>;
+};
+
+export type HidePriorityGameplayDeps = {
+	repo: Pick<GamesDraftRepo, 'hidePriorityGameplay'>;
+};
+
+export type HideRegularGameplayDeps = {
+	repo: Pick<GamesDraftRepo, 'hideRegularGameplay'>;
 };
 
 export type ArchiveGameDeps = {

@@ -1006,9 +1006,15 @@ export default function AdminGameMissionPage() {
 															<AdminButton variant="secondary" onClick={() => setConfirmAction({ title: ta('gamesConfirmReleasePriorityTitle'), description: ta('gamesConfirmReleasePriorityText'), confirmLabel: ta('gamesReleasePriorityAction'), onConfirm: () => { setConfirmAction(null); void handleSimpleMissionAction(`/api/admin/games/${mission.id}/release-priority`, 'gamesReleasePriorityAction'); } })} disabled={activeAction !== null || mission.status !== 'published'}>
 																{activeAction === 'gamesReleasePriorityAction' ? ta('gamesReleasingPriority') : ta('gamesReleasePriorityAction')}
 															</AdminButton>
+																<AdminButton variant="secondary" onClick={() => setConfirmAction({ title: ta('gamesConfirmHidePriorityTitle'), description: ta('gamesConfirmHidePriorityText'), confirmLabel: ta('gamesHidePriorityAction'), onConfirm: () => { setConfirmAction(null); void handleSimpleMissionAction(`/api/admin/games/${mission.id}/hide-priority`, 'gamesHidePriorityAction'); } })} disabled={activeAction !== null || mission.status !== 'published' || !mission.priorityGameplayReleasedAt || !!mission.regularGameplayReleasedAt}>
+																	{activeAction === 'gamesHidePriorityAction' ? ta('gamesHidingPriority') : ta('gamesHidePriorityAction')}
+																</AdminButton>
 															<AdminButton variant="secondary" onClick={() => setConfirmAction({ title: ta('gamesConfirmReleaseRegularTitle'), description: ta('gamesConfirmReleaseRegularText'), confirmLabel: ta('gamesReleaseRegularAction'), onConfirm: () => { setConfirmAction(null); void handleSimpleMissionAction(`/api/admin/games/${mission.id}/release-regular`, 'gamesReleaseRegularAction'); } })} disabled={activeAction !== null || mission.status !== 'published'}>
 																{activeAction === 'gamesReleaseRegularAction' ? ta('gamesReleasingRegular') : ta('gamesReleaseRegularAction')}
 															</AdminButton>
+																<AdminButton variant="secondary" onClick={() => setConfirmAction({ title: ta('gamesConfirmHideRegularTitle'), description: ta('gamesConfirmHideRegularText'), confirmLabel: ta('gamesHideRegularAction'), onConfirm: () => { setConfirmAction(null); void handleSimpleMissionAction(`/api/admin/games/${mission.id}/hide-regular`, 'gamesHideRegularAction'); } })} disabled={activeAction !== null || mission.status !== 'published' || !mission.regularGameplayReleasedAt}>
+																	{activeAction === 'gamesHideRegularAction' ? ta('gamesHidingRegular') : ta('gamesHideRegularAction')}
+																</AdminButton>
 														</div>
 													</ActionCard>
 
