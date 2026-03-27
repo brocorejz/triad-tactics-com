@@ -21,6 +21,47 @@ type ApplicationRow = {
 	approval_email_sent_at: string | null;
 };
 
+function mapApplicationRow(row: ApplicationRow): Application {
+	return {
+		...row,
+		ip_address: row.ip_address ?? undefined,
+		locale: row.locale ?? undefined,
+		confirmed_at: row.confirmed_at ?? null,
+		confirmed_by_steamid64: row.confirmed_by_steamid64 ?? null,
+		approval_email_sent_at: row.approval_email_sent_at ?? null,
+		answers: normalizeApplicationAnswers(row.answers)
+	};
+}
+
+function buildApplicationsFilter(input: { status: 'active' | 'archived' | 'all'; query?: string }) {
+	const clauses: string[] = [];
+	const params: unknown[] = [];
+
+	if (input.status === 'active') {
+		clauses.push('confirmed_at IS NULL');
+	} else if (input.status === 'archived') {
+		clauses.push('confirmed_at IS NOT NULL');
+	}
+
+	const needle = input.query?.trim().toLowerCase();
+	if (needle) {
+		const like = `%${needle}%`;
+		clauses.push(`(
+			LOWER(email) LIKE ?
+			OR LOWER(steamid64) LIKE ?
+			OR LOWER(COALESCE(persona_name, '')) LIKE ?
+			OR LOWER(COALESCE(json_extract(answers, '$.callsign'), '')) LIKE ?
+			OR LOWER(COALESCE(json_extract(answers, '$.name'), '')) LIKE ?
+		)`);
+		params.push(like, like, like, like, like);
+	}
+
+	return {
+		whereClause: clauses.length > 0 ? `WHERE ${clauses.join('\n\t\tAND ')}` : '',
+		params
+	};
+}
+
 export function normalizeApplicationAnswers(raw: string): Application['answers'] {
 	let parsed: unknown;
 	try {
@@ -144,15 +185,41 @@ export function getApplicationsByStatus(status: 'active' | 'archived' | 'all') {
 		${orderBy}
 	`);
 	const rows = stmt.all() as ApplicationRow[];
-	return rows.map((row) => ({
-		...row,
-		ip_address: row.ip_address ?? undefined,
-		locale: row.locale ?? undefined,
-		confirmed_at: row.confirmed_at ?? null,
-		confirmed_by_steamid64: row.confirmed_by_steamid64 ?? null,
-		approval_email_sent_at: row.approval_email_sent_at ?? null,
-		answers: normalizeApplicationAnswers(row.answers)
-	}));
+	return rows.map(mapApplicationRow);
+}
+
+export function getApplicationsPage(input: {
+	status: 'active' | 'archived' | 'all';
+	query?: string;
+	page: number;
+	pageSize: number;
+}) {
+	const db = getDb();
+	const { whereClause, params } = buildApplicationsFilter(input);
+	const orderBy = input.status === 'archived' ? 'ORDER BY confirmed_at DESC' : 'ORDER BY created_at DESC';
+	const offset = (input.page - 1) * input.pageSize;
+	const stmt = db.prepare(`
+		SELECT id, user_id, email, steamid64, persona_name, answers, ip_address, locale, created_at, confirmed_at, confirmed_by_steamid64, approval_email_sent_at
+		FROM applications
+		${whereClause}
+		${orderBy}
+		LIMIT ?
+		OFFSET ?
+	`);
+	const rows = stmt.all(...params, input.pageSize, offset) as ApplicationRow[];
+	return rows.map(mapApplicationRow);
+}
+
+export function countApplications(input: { status: 'active' | 'archived' | 'all'; query?: string }) {
+	const db = getDb();
+	const { whereClause, params } = buildApplicationsFilter(input);
+	const stmt = db.prepare(`
+		SELECT COUNT(1) as count
+		FROM applications
+		${whereClause}
+	`);
+	const row = stmt.get(...params) as { count: number } | undefined;
+	return row?.count ?? 0;
 }
 
 export function countApplicationsByStatus(status: 'active' | 'archived' | 'all') {

@@ -17,6 +17,7 @@ import {
 	AdminDisclosure,
 	AdminField,
 	AdminGate,
+	AdminPagination,
 	AdminSearchInput,
 	AdminSurface,
 	AdminTabButton,
@@ -44,6 +45,7 @@ export default function AdminPage() {
 	const [apps, setApps] = useState<AdminApplicationsView | null>(null);
 	const [appsStatus, setAppsStatus] = useState<'active' | 'archived'>('active');
 	const [query, setQuery] = useState('');
+	const [currentPage, setCurrentPage] = useState(1);
 	const searchInputRef = useRef<HTMLInputElement | null>(null);
 	const [confirmingId, setConfirmingId] = useState<number | null>(null);
 	const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -55,6 +57,10 @@ export default function AdminPage() {
 		const handle = window.setTimeout(() => setDebouncedQuery(query), 200);
 		return () => window.clearTimeout(handle);
 	}, [query]);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [appsStatus, debouncedQuery]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -74,9 +80,10 @@ export default function AdminPage() {
 	}, []);
 
 	const loadApps = useMemo(() => {
-		return async (opts: { status: 'active' | 'archived'; q: string }) => {
+		return async (opts: { status: 'active' | 'archived'; q: string; page: number }) => {
 			const params = new URLSearchParams();
 			params.set('status', opts.status);
+			params.set('page', String(opts.page));
 			if (opts.q.trim()) params.set('q', opts.q.trim());
 			const res = await fetch(`/api/admin?${params.toString()}`, { cache: 'no-store' });
 			const json: unknown = (await res.json()) as unknown;
@@ -89,8 +96,10 @@ export default function AdminPage() {
 		let cancelled = false;
 		(async () => {
 			try {
-				const json = await loadApps({ status: appsStatus, q: debouncedQuery });
-				if (!cancelled) setApps(json);
+				const json = await loadApps({ status: appsStatus, q: debouncedQuery, page: currentPage });
+				if (cancelled) return;
+				setApps(json);
+				if ('success' in json && json.page !== currentPage) setCurrentPage(json.page);
 			} catch {
 				if (!cancelled) setApps({ error: 'server_error' });
 			}
@@ -98,7 +107,7 @@ export default function AdminPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [status, appsStatus, debouncedQuery, loadApps]);
+	}, [status, appsStatus, currentPage, debouncedQuery, loadApps]);
 
 	const handleConfirm = async (applicationId: number) => {
 		try {
@@ -115,8 +124,9 @@ export default function AdminPage() {
 			}
 
 			// Refresh current view.
-			const json = await loadApps({ status: appsStatus, q: debouncedQuery });
+			const json = await loadApps({ status: appsStatus, q: debouncedQuery, page: currentPage });
 			setApps(json);
+			if ('success' in json && json.page !== currentPage) setCurrentPage(json.page);
 		} catch {
 			setConfirmError('confirm_failed');
 		} finally {
@@ -141,8 +151,9 @@ export default function AdminPage() {
 			}
 
 			// Refresh current view.
-			const json = await loadApps({ status: appsStatus, q: debouncedQuery });
+			const json = await loadApps({ status: appsStatus, q: debouncedQuery, page: currentPage });
 			setApps(json);
+			if ('success' in json && json.page !== currentPage) setCurrentPage(json.page);
 		} catch {
 			setConfirmRenameError('confirm_rename_failed');
 		} finally {
@@ -200,6 +211,20 @@ export default function AdminPage() {
 							{confirmRenameError ? (
 								<p className="text-sm text-neutral-300">{ta('confirmRenameError')}</p>
 							) : null}
+							<AdminPagination
+								page={apps.page}
+								totalPages={apps.totalPages}
+								summary={ta('paginationSummary', {
+									from: (apps.page - 1) * apps.pageSize + 1,
+									to: Math.min(apps.page * apps.pageSize, apps.count),
+									total: apps.count,
+									page: apps.page,
+									pages: apps.totalPages
+								})}
+								previousLabel={ta('paginationPrevious')}
+								nextLabel={ta('paginationNext')}
+								onPageChange={setCurrentPage}
+							/>
 							{apps.applications.map((row, idx) => {
 								const key = row.id ?? idx;
 								const isConfirmed = !!row.confirmed_at;

@@ -121,6 +121,9 @@ const adminRenameRequestRowSchema = z.object({
 const adminApplicationsSuccessSchema = z.object({
 	success: z.literal(true),
 	count: z.number(),
+	page: z.number().int().min(1),
+	pageSize: z.number().int().min(1),
+	totalPages: z.number().int().min(1),
 	counts: z.object({
 		active: z.number(),
 		archived: z.number(),
@@ -132,6 +135,9 @@ const adminApplicationsSuccessSchema = z.object({
 const adminUsersSuccessSchema = z.object({
 	success: z.literal(true),
 	count: z.number(),
+	page: z.number().int().min(1),
+	pageSize: z.number().int().min(1),
+	totalPages: z.number().int().min(1),
 	counts: z.object({
 		all: z.number(),
 		renameRequired: z.number(),
@@ -175,11 +181,27 @@ const adminErrorSchema = z.object({
 });
 
 export type AdminApplicationsView =
-	| { success: true; count: number; counts: { active: number; archived: number; total: number }; applications: Application[] }
+	| {
+			success: true;
+			count: number;
+			page: number;
+			pageSize: number;
+			totalPages: number;
+			counts: { active: number; archived: number; total: number };
+			applications: Application[];
+	  }
 	| { error: string };
 
 export type AdminUsersView =
-	| { success: true; count: number; counts: { all: number; renameRequired: number; confirmed: number }; users: AdminUserRow[] }
+	| {
+			success: true;
+			count: number;
+			page: number;
+			pageSize: number;
+			totalPages: number;
+			counts: { all: number; renameRequired: number; confirmed: number };
+			users: AdminUserRow[];
+	  }
 	| { error: string };
 
 export type AdminRenameRequestsView =

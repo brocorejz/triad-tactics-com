@@ -2,35 +2,31 @@ import type { Application } from '@/features/apply/domain/types';
 import type { ListApplicationsDeps } from '../ports';
 
 export type ListApplicationsResult = {
+	page: number;
+	pageSize: number;
+	totalPages: number;
+	total: number;
 	applications: Application[];
 	counts: { active: number; archived: number; total: number };
 };
 
-function matchesQuery(app: Application, q: string) {
-	const needle = q.trim().toLowerCase();
-	if (!needle) return true;
-	const callsign = app.answers?.callsign ?? '';
-	const name = app.answers?.name ?? '';
-	const haystacks = [
-		app.email ?? '',
-		app.steamid64 ?? '',
-		app.persona_name ?? '',
-		callsign,
-		name
-	];
-	return haystacks.some((h) => h.toLowerCase().includes(needle));
-}
-
 export function listApplications(
 	deps: ListApplicationsDeps,
-	input: { status: 'active' | 'archived' | 'all'; query?: string }
+	input: { status: 'active' | 'archived' | 'all'; query?: string; page: number; pageSize: number }
 ): ListApplicationsResult {
-	const applications = deps.repo.getApplicationsByStatus(input.status);
-	const filtered = input.query?.trim() ? applications.filter((a) => matchesQuery(a, input.query ?? '')) : applications;
+	const total = deps.repo.countApplications({ status: input.status, query: input.query });
+	const totalPages = Math.max(1, Math.ceil(total / input.pageSize));
+	const page = Math.min(Math.max(1, input.page), totalPages);
+	const applications = deps.repo.getApplicationsPage({
+		status: input.status,
+		query: input.query,
+		page,
+		pageSize: input.pageSize
+	});
 	const counts = {
 		active: deps.repo.countApplicationsByStatus('active'),
 		archived: deps.repo.countApplicationsByStatus('archived'),
 		total: deps.repo.countApplicationsByStatus('all')
 	};
-	return { applications: filtered, counts };
+	return { page, pageSize: input.pageSize, totalPages, total, applications, counts };
 }

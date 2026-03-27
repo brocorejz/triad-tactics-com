@@ -1,6 +1,8 @@
 import {
 	countApplicationsByStatus,
+	countApplications,
 	getApplicationsByStatus,
+	getApplicationsPage,
 	getById as getApplicationById,
 	markApprovalEmailSent
 } from '@/features/apply/infra/sqliteApplications';
@@ -8,12 +10,14 @@ import {
 	assignBadgeToUser,
 	clearUserRenameRequiredBySteamId64,
 	confirmApplication,
+	countUsers,
 	countUsersByStatus,
 	createBadgeType,
 	decideRenameRequest,
 	listBadgeTypes,
 	listRenameRequests,
 	listUsers,
+	listUsersPage,
 	removeBadgeFromUser,
 	setUserRenameRequiredBySteamId64
 	,
@@ -39,7 +43,9 @@ import { buildApprovalContent, buildApprovedBroadcastContent } from '@/platform/
 
 export const listApplicationsDeps: ListApplicationsDeps = {
 	repo: {
+		getApplicationsPage,
 		getApplicationsByStatus,
+		countApplications,
 		countApplicationsByStatus
 	}
 };
@@ -62,7 +68,9 @@ export const confirmApplicationAndNotifyDeps: ConfirmApplicationAndNotifyDeps = 
 
 export const sendMailingDeps = {
 	repo: {
+		getApplicationsPage,
 		getApplicationsByStatus,
+		countApplications,
 		countApplicationsByStatus
 	},
 	outbox: {
@@ -85,6 +93,8 @@ export const renameRequiredDeps: RenameRequiredDeps = {
 export const listUsersDeps: ListUsersDeps = {
 	repo: {
 		listUsers,
+		listUsersPage,
+		countUsers,
 		countUsersByStatus
 	}
 };

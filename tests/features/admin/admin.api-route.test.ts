@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { setupIsolatedDb } from '../../fixtures/isolatedDb';
 import { buildTestApplicationRecord } from '../../fixtures/application';
 import { createSteamSession } from '../../fixtures/steamSession';
@@ -17,6 +17,11 @@ describe('Admin API: Steam allowlist auth', () => {
 			prefix: 'triad-tactics-admin-test',
 			adminSteamIds: '76561198012345678'
 		});
+	});
+
+	beforeEach(async () => {
+		const { dbOperations } = await import('../../fixtures/dbOperations');
+		dbOperations.clearAll();
 	});
 
 	it('returns connected=false for status without session', async () => {
@@ -89,5 +94,42 @@ describe('Admin API: Steam allowlist auth', () => {
 		const json = await res.json();
 		expect(json.success).toBe(true);
 		expect(json.count).toBeGreaterThan(0);
+	});
+
+	it('paginates admin applications on the server and clamps out-of-range pages', async () => {
+		const { dbOperations, GET_ADMIN, NextRequest } = await loadAdminApiHarness();
+
+		for (let index = 0; index < 55; index += 1) {
+			dbOperations.insertApplication(
+				buildTestApplicationRecord({
+					email: `admin-page-${index}@example.com`,
+					steamid64: `7656119802000${index.toString().padStart(4, '0')}`,
+					callsign: `Applicant${index}`
+				})
+			);
+		}
+
+		const sid = createSteamSession(dbOperations, {
+			steamid64: '76561198012345678',
+			redirectPath: '/en/admin',
+			personaName: 'Admin'
+		});
+
+		const req = new NextRequest('http://localhost/api/admin?status=active&page=99', {
+			method: 'GET',
+			headers: {
+				cookie: `tt_steam_session=${sid}`
+			}
+		});
+
+		const res = await GET_ADMIN(req);
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.count).toBe(55);
+		expect(json.page).toBe(2);
+		expect(json.pageSize).toBe(50);
+		expect(json.totalPages).toBe(2);
+		expect(json.applications).toHaveLength(5);
 	});
 });

@@ -208,6 +208,42 @@ describe('Admin badge endpoints (integration)', () => {
 		expect(removeJson.badges).toEqual([]);
 	});
 
+	it('paginates admin users on the server and clamps out-of-range pages', async () => {
+		const { dbOperations, GET_USERS, NextRequest } = await loadAdminBadgesHarness();
+		const adminSid = createSteamSession(dbOperations, {
+			steamid64: ADMIN_STEAM_ID,
+			redirectPath: '/en/admin/users'
+		});
+
+		for (let index = 0; index < 55; index += 1) {
+			const ensured = dbOperations.getOrCreateUserBySteamId64({
+				steamid64: `7656119803000${index.toString().padStart(4, '0')}`
+			});
+			if (!ensured.success || !ensured.user) {
+				throw new Error('Expected user to exist');
+			}
+
+			getDb()
+				.prepare('UPDATE users SET current_callsign = ? WHERE id = ?')
+				.run(`User${index}`, ensured.user.id);
+		}
+
+		const usersResponse = await GET_USERS(
+			new NextRequest('http://localhost/api/admin/users?status=all&page=99', {
+				method: 'GET',
+				headers: { cookie: `tt_steam_session=${adminSid}` }
+			})
+		);
+		expect(usersResponse.status).toBe(200);
+		const usersJson = await usersResponse.json();
+		expect(usersJson.success).toBe(true);
+		expect(usersJson.count).toBe(55);
+		expect(usersJson.page).toBe(2);
+		expect(usersJson.pageSize).toBe(50);
+		expect(usersJson.totalPages).toBe(2);
+		expect(usersJson.users).toHaveLength(5);
+	});
+
 	it('updates badge status and blocks assignment of retired badges', async () => {
 		const { dbOperations, GET_BADGES, POST_BADGE_STATUS, POST_USER_BADGE, NextRequest } =
 			await loadAdminBadgesHarness();

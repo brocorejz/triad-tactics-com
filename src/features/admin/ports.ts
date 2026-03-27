@@ -3,6 +3,13 @@ import type { AdminBadgeType, AdminRenameRequestRow, AdminUserBadge, AdminUserRo
 
 export type AdminApplicationsRepo = {
 	getApplicationsByStatus: (status: 'active' | 'archived' | 'all') => Application[];
+	getApplicationsPage: (input: {
+		status: 'active' | 'archived' | 'all';
+		query?: string;
+		page: number;
+		pageSize: number;
+	}) => Application[];
+	countApplications: (input: { status: 'active' | 'archived' | 'all'; query?: string }) => number;
 	countApplicationsByStatus: (status: 'active' | 'archived' | 'all') => number;
 };
 
@@ -85,6 +92,13 @@ export type RenameRequiredDeps = {
 
 export type AdminUsersRepo = {
 	listUsers: (status: 'all' | 'rename_required' | 'confirmed') => AdminUserRow[];
+	listUsersPage: (input: {
+		status: 'all' | 'rename_required' | 'confirmed';
+		query?: string;
+		page: number;
+		pageSize: number;
+	}) => AdminUserRow[];
+	countUsers: (input: { status: 'all' | 'rename_required' | 'confirmed'; query?: string }) => number;
 	countUsersByStatus: (status: 'all' | 'rename_required' | 'confirmed') => number;
 };
 

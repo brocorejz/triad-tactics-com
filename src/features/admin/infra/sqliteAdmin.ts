@@ -45,6 +45,41 @@ function listBadgesForUser(userId: number): AdminUserBadge[] {
 	return listUserBadgesMap([userId]).get(userId) ?? [];
 }
 
+function buildUsersFilter(input: { status: 'all' | 'rename_required' | 'confirmed'; query?: string }) {
+	const clauses: string[] = [];
+	const params: unknown[] = [];
+
+	if (input.status === 'rename_required') {
+		clauses.push('rrq.user_id IS NOT NULL');
+	} else if (input.status === 'confirmed') {
+		clauses.push('u.player_confirmed_at IS NOT NULL');
+	}
+
+	const needle = input.query?.trim().toLowerCase();
+	if (needle) {
+		const like = `%${needle}%`;
+		clauses.push(`(
+			LOWER(COALESCE(ui.provider_user_id, '')) LIKE ?
+			OR LOWER(COALESCE(u.discord_id, '')) LIKE ?
+			OR LOWER(COALESCE(u.current_callsign, '')) LIKE ?
+			OR CAST(u.id AS TEXT) LIKE ?
+			OR CAST(COALESCE(u.confirmed_application_id, '') AS TEXT) LIKE ?
+			OR EXISTS (
+				SELECT 1
+				FROM user_badges ub
+				JOIN badge_types bt ON bt.id = ub.badge_type_id
+				WHERE ub.user_id = u.id AND LOWER(bt.label) LIKE ?
+			)
+		)`);
+		params.push(like, like, like, like, like, like);
+	}
+
+	return {
+		whereClause: clauses.length > 0 ? `WHERE ${clauses.join('\n\t\tAND ')}` : '',
+		params
+	};
+}
+
 function getBadgeTypeById(badgeTypeId: number): AdminBadgeType | null {
 	const db = getDb();
 	const row = db.prepare(`
@@ -111,6 +146,63 @@ export function listUsers(status: 'all' | 'rename_required' | 'confirmed'): Admi
 		has_pending_rename_request: !!row.has_pending_rename_request,
 		badges: badgesByUser.get(row.id) ?? []
 	}));
+}
+
+export function listUsersPage(input: {
+	status: 'all' | 'rename_required' | 'confirmed';
+	query?: string;
+	page: number;
+	pageSize: number;
+}): AdminUserRow[] {
+	const db = getDb();
+	const { whereClause, params } = buildUsersFilter(input);
+	const offset = (input.page - 1) * input.pageSize;
+	const stmt = db.prepare(`
+		SELECT u.id, u.created_at, u.player_confirmed_at, u.confirmed_application_id,
+			u.current_callsign,
+			u.discord_id as discord_id,
+			rrq.required_at as rename_required_at,
+			rrq.reason as rename_required_reason,
+			rrq.required_by_steamid64 as rename_required_by_steamid64,
+			EXISTS(
+				SELECT 1
+				FROM rename_requests rr
+				WHERE rr.user_id = u.id AND rr.status = 'pending'
+			) as has_pending_rename_request,
+			ui.provider_user_id as steamid64
+		FROM users u
+		LEFT JOIN user_identities ui
+			ON ui.user_id = u.id AND ui.provider = 'steam'
+		LEFT JOIN rename_requirements rrq ON rrq.user_id = u.id
+		${whereClause}
+		ORDER BY u.created_at DESC
+		LIMIT ?
+		OFFSET ?
+	`);
+	const rows = stmt.all(...params, input.pageSize, offset) as Array<
+		Omit<AdminUserRow, 'badges'> & { has_pending_rename_request: number | boolean }
+	>;
+	const badgesByUser = listUserBadgesMap(rows.map((row) => row.id));
+	return rows.map((row) => ({
+		...row,
+		has_pending_rename_request: !!row.has_pending_rename_request,
+		badges: badgesByUser.get(row.id) ?? []
+	}));
+}
+
+export function countUsers(input: { status: 'all' | 'rename_required' | 'confirmed'; query?: string }) {
+	const db = getDb();
+	const { whereClause, params } = buildUsersFilter(input);
+	const stmt = db.prepare(`
+		SELECT COUNT(1) as count
+		FROM users u
+		LEFT JOIN user_identities ui
+			ON ui.user_id = u.id AND ui.provider = 'steam'
+		LEFT JOIN rename_requirements rrq ON rrq.user_id = u.id
+		${whereClause}
+	`);
+	const row = stmt.get(...params) as { count: number } | undefined;
+	return row?.count ?? 0;
 }
 
 export function listBadgeTypes(): AdminBadgeType[] {

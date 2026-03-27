@@ -20,6 +20,7 @@ import {
 	AdminDisclosure,
 	AdminField,
 	AdminGate,
+	AdminPagination,
 	AdminSearchInput,
 	AdminSurface,
 	AdminTabButton,
@@ -45,6 +46,7 @@ export default function AdminUsersPage() {
 	const [users, setUsers] = useState<AdminUsersView | null>(null);
 	const [usersStatus, setUsersStatus] = useState<'all' | 'rename_required' | 'confirmed'>('all');
 	const [query, setQuery] = useState('');
+	const [currentPage, setCurrentPage] = useState(1);
 	const searchInputRef = useRef<HTMLInputElement | null>(null);
 	const [renamingSteamId, setRenamingSteamId] = useState<string | null>(null);
 	const [renameError, setRenameError] = useState<string | null>(null);
@@ -59,6 +61,10 @@ export default function AdminUsersPage() {
 		const handle = window.setTimeout(() => setDebouncedQuery(query), 200);
 		return () => window.clearTimeout(handle);
 	}, [query]);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [usersStatus, debouncedQuery]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -105,9 +111,10 @@ export default function AdminUsersPage() {
 	}, [status]);
 
 	const loadUsers = useMemo(() => {
-		return async (opts: { status: 'all' | 'rename_required' | 'confirmed'; q: string }) => {
+		return async (opts: { status: 'all' | 'rename_required' | 'confirmed'; q: string; page: number }) => {
 			const sp = new URLSearchParams();
 			sp.set('status', opts.status);
+			sp.set('page', String(opts.page));
 			if (opts.q.trim()) sp.set('q', opts.q.trim());
 			const res = await fetch(`/api/admin/users?${sp.toString()}`, { cache: 'no-store' });
 			const json: unknown = (await res.json()) as unknown;
@@ -120,8 +127,10 @@ export default function AdminUsersPage() {
 		let cancelled = false;
 		(async () => {
 			try {
-				const json = await loadUsers({ status: usersStatus, q: debouncedQuery });
-				if (!cancelled) setUsers(json);
+				const json = await loadUsers({ status: usersStatus, q: debouncedQuery, page: currentPage });
+				if (cancelled) return;
+				setUsers(json);
+				if ('success' in json && json.page !== currentPage) setCurrentPage(json.page);
 			} catch {
 				if (!cancelled) setUsers({ error: 'server_error' });
 			}
@@ -129,7 +138,7 @@ export default function AdminUsersPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [status, usersStatus, debouncedQuery, loadUsers]);
+	}, [status, usersStatus, currentPage, debouncedQuery, loadUsers]);
 
 	const handleRequestRename = async (steamid64: string) => {
 		try {
@@ -148,8 +157,9 @@ export default function AdminUsersPage() {
 			}
 
 			// Refresh current view.
-			const json = await loadUsers({ status: usersStatus, q: debouncedQuery });
+			const json = await loadUsers({ status: usersStatus, q: debouncedQuery, page: currentPage });
 			setUsers(json);
+			if ('success' in json && json.page !== currentPage) setCurrentPage(json.page);
 		} catch {
 			setRenameError('rename_failed');
 		} finally {
@@ -274,6 +284,20 @@ export default function AdminUsersPage() {
 						<div className="grid gap-3 grid-cols-1">
 							{renameError ? <p className="text-sm text-neutral-300">{ta('renameError')}</p> : null}
 							{badgeError ? <p className="text-sm text-neutral-300">{badgeError}</p> : null}
+							<AdminPagination
+								page={users.page}
+								totalPages={users.totalPages}
+								summary={ta('paginationSummary', {
+									from: (users.page - 1) * users.pageSize + 1,
+									to: Math.min(users.page * users.pageSize, users.count),
+									total: users.count,
+									page: users.page,
+									pages: users.totalPages
+								})}
+								previousLabel={ta('paginationPrevious')}
+								nextLabel={ta('paginationNext')}
+								onPageChange={setCurrentPage}
+							/>
 							{users.users.map((row, idx) => {
 								const key = (row.id ?? idx).toString();
 								const steamid64 = row.steamid64 ?? null;

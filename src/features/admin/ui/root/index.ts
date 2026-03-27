@@ -8,6 +8,7 @@ export * from './AdminBadge';
 export * from './AdminButton';
 export * from './AdminDisclosure';
 export * from './AdminField';
+export * from './AdminPagination';
 export { default as AdminPage } from '../AdminPage';
 export { default as AdminBadgesPage } from '../AdminBadgesPage';
 export { default as AdminMailingPage } from '../AdminMailingPage';
