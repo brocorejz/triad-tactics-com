@@ -46,7 +46,22 @@ const adminGameMissionOverviewSchema = z.object({
 	earlyPassword: z.string().nullable(),
 	finalPassword: z.string().nullable(),
 	serverDetailsHidden: z.boolean(),
-	priorityBadgeTypeIds: z.array(z.number().int().positive())
+	priorityBadgeTypeIds: z.array(z.number().int().positive()),
+	updates: z.array(
+		z.object({
+			id: z.number().int().positive(),
+			kind: z.enum([
+				'squads_slotting_started',
+				'priority_slotting_started',
+				'regular_slotting_started',
+				'game_started_wait_next_episode'
+			]),
+			episodeNumber: z.number().int().positive().nullable(),
+			totalEpisodes: z.number().int().positive().nullable(),
+			createdAt: z.string(),
+			createdBySteamId64: z.string().nullable()
+		})
+	)
 });
 
 const adminGameMissionDetailSchema = adminGameMissionOverviewSchema.extend({

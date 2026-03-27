@@ -2,6 +2,8 @@ import {
 	archiveGame,
 	cancelGame,
 	claimPrioritySlot,
+	createMissionUpdate,
+	updateMissionUpdate,
 	createDraft,
 	deleteArchivedMission,
 	deleteCurrentDraft,
@@ -28,6 +30,7 @@ import type {
 	ArchiveGameDeps,
 	CancelGameDeps,
 	ClaimPrioritySlotDeps,
+	CreateMissionUpdateDeps,
 	CreateGameDraftDeps,
 	DeleteArchivedMissionDeps,
 	DeleteCurrentDraftDeps,
@@ -48,7 +51,8 @@ import type {
 	ReleaseRegularGameplayDeps,
 	SwitchPrioritySlotDeps,
 	UpdateGameSlottingDeps,
-	UpdateGameSettingsDeps
+	UpdateGameSettingsDeps,
+	UpdateMissionUpdateDeps
 } from './ports';
 
 export const getAdminGamesOverviewDeps: GetAdminGamesOverviewDeps = {
@@ -132,6 +136,18 @@ export const deleteArchivedMissionDeps: DeleteArchivedMissionDeps = {
 export const getMissionAuditDeps: GetMissionAuditDeps = {
 	repo: {
 		getMissionAuditHistory
+	}
+};
+
+export const createMissionUpdateDeps: CreateMissionUpdateDeps = {
+	repo: {
+		createMissionUpdate
+	}
+};
+
+export const updateMissionUpdateDeps: UpdateMissionUpdateDeps = {
+	repo: {
+		updateMissionUpdate
 	}
 };
 

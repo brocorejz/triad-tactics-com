@@ -73,6 +73,8 @@ function insertPublishedMission(opts?: {
 	regularJoinEnabled?: boolean;
 	priorityGameplayReleasedAt?: string | null;
 	regularGameplayReleasedAt?: string | null;
+	priorityGameplayEverReleased?: boolean;
+	regularGameplayEverReleased?: boolean;
 	earlyPassword?: string | null;
 	finalPassword?: string | null;
 	slotting?: unknown;
@@ -95,13 +97,15 @@ function insertPublishedMission(opts?: {
 			regular_join_enabled,
 			priority_gameplay_released_at,
 			regular_gameplay_released_at,
+			priority_gameplay_ever_released,
+			regular_gameplay_ever_released,
 			slotting_json,
 			created_by_steamid64,
 			updated_by_steamid64,
 			published_at,
 			published_by_steamid64
 		)
-		VALUES (?, 'published', 'Operation Release', '', 'Triad Server', '203.0.113.40', 2302, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+		VALUES (?, 'published', 'Operation Release', '', 'Triad Server', '203.0.113.40', 2302, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
 	`).run(
 		opts?.shortCode ?? 'OP-RELEASE',
 		early,
@@ -110,6 +114,8 @@ function insertPublishedMission(opts?: {
 		opts?.regularJoinEnabled ? 1 : 0,
 		opts?.priorityGameplayReleasedAt ?? null,
 		opts?.regularGameplayReleasedAt ?? null,
+		typeof opts?.priorityGameplayEverReleased === 'boolean' ? (opts.priorityGameplayEverReleased ? 1 : 0) : (opts?.priorityGameplayReleasedAt ? 1 : 0),
+		typeof opts?.regularGameplayEverReleased === 'boolean' ? (opts.regularGameplayEverReleased ? 1 : 0) : (opts?.regularGameplayReleasedAt ? 1 : 0),
 		JSON.stringify(opts?.slotting ?? createSlottingShape({ includePriority: true, includeRegular: true })),
 		ADMIN_STEAM_ID,
 		ADMIN_STEAM_ID,
@@ -306,9 +312,10 @@ describe('Admin game release endpoints (integration)', () => {
 		expect(json.mission.regularGameplayReleasedAt).toBeNull();
 
 		const row = getDb()
-			.prepare('SELECT regular_gameplay_released_at FROM missions WHERE id = ? LIMIT 1')
+			.prepare('SELECT regular_gameplay_released_at, regular_gameplay_ever_released FROM missions WHERE id = ? LIMIT 1')
 			.get(missionId) as { regular_gameplay_released_at: string | null };
 		expect(row.regular_gameplay_released_at).toBeNull();
+		expect((row as { regular_gameplay_ever_released: number }).regular_gameplay_ever_released).toBe(1);
 	});
 
 	it('requires hiding regular password before hiding priority password', async () => {
@@ -365,5 +372,11 @@ describe('Admin game release endpoints (integration)', () => {
 		const json = await res.json();
 		expect(json.success).toBe(true);
 		expect(json.mission.priorityGameplayReleasedAt).toBeNull();
+
+		const row = getDb()
+			.prepare('SELECT priority_gameplay_released_at, priority_gameplay_ever_released FROM missions WHERE id = ? LIMIT 1')
+			.get(missionId) as { priority_gameplay_released_at: string | null; priority_gameplay_ever_released: number };
+		expect(row.priority_gameplay_released_at).toBeNull();
+		expect(row.priority_gameplay_ever_released).toBe(1);
 	});
 });

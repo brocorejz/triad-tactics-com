@@ -1,7 +1,7 @@
 import type { useTranslations } from 'next-intl';
 import type { CanonicalSlot, CanonicalSlotOccupant } from '@/features/games/domain/slotting';
 import { sideDisplayName } from '@/features/games/domain/slotting';
-import type { GameMissionDetail } from '@/features/games/domain/types';
+import type { GameMissionDetail, GameMissionUpdate } from '@/features/games/domain/types';
 import { formatLocalizedDateTime, parseDateTimeValue, type ViewerHourCycle } from '@/platform/dateTime';
 
 export type MissionSide = GameMissionDetail['slotting']['sides'][number];
@@ -68,6 +68,43 @@ export function slotAccessLabel(access: CanonicalSlot['access'], t: ReturnType<t
 	if (access === 'priority') return t('slotAccessPriority');
 	if (access === 'regular') return t('slotAccessRegular');
 	return t('slotAccessSquad');
+}
+
+export function formatMissionUpdateMessage(update: GameMissionUpdate, t: ReturnType<typeof useTranslations<'games'>>): string {
+	const prefix = update.episodeNumber !== null ? `${t('missionUpdateEpisodePrefix', { episodeNumber: update.episodeNumber })} ` : '';
+
+	if (update.kind === 'squads_slotting_started') {
+		return `${prefix}${t('missionUpdateKindSquadsSlottingStarted')}`;
+	}
+
+	if (update.kind === 'priority_slotting_started') {
+		return `${prefix}${t('missionUpdateKindPrioritySlottingStarted')}`;
+	}
+
+	if (update.kind === 'regular_slotting_started') {
+		return `${prefix}${t('missionUpdateKindRegularSlottingStarted')}`;
+	}
+
+	if (
+		update.episodeNumber !== null &&
+		update.totalEpisodes !== null &&
+		update.episodeNumber >= update.totalEpisodes
+	) {
+		return `${prefix}${t('missionUpdateKindGameStartedLastEpisode')}`;
+	}
+
+	if (
+		update.episodeNumber !== null &&
+		update.totalEpisodes !== null &&
+		update.episodeNumber < update.totalEpisodes
+	) {
+		return `${prefix}${t('missionUpdateKindGameStartedWaitNextEpisode', {
+			nextEpisodeNumber: update.episodeNumber + 1,
+			totalEpisodes: update.totalEpisodes
+		})}`;
+	}
+
+	return `${prefix}${t('missionUpdateKindGameStartedWaitNextEpisodeGeneric')}`;
 }
 
 export function missionStatusLabel(mission: GameMissionDetail, t: ReturnType<typeof useTranslations<'games'>>): string {

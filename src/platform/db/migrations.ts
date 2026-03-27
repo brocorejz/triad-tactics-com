@@ -506,5 +506,36 @@ export const migrations: Migration[] = [
 			DROP INDEX IF EXISTS idx_content_settings_updated_at;
 			DROP TABLE IF EXISTS content_settings;
 		`
+	},
+	{
+		id: 9,
+		name: 'mission_gameplay_progress_flags_and_public_updates',
+		up: `
+			ALTER TABLE missions ADD COLUMN priority_gameplay_ever_released INTEGER NOT NULL DEFAULT 0 CHECK(priority_gameplay_ever_released IN (0, 1));
+			ALTER TABLE missions ADD COLUMN regular_gameplay_ever_released INTEGER NOT NULL DEFAULT 0 CHECK(regular_gameplay_ever_released IN (0, 1));
+
+			UPDATE missions
+			SET priority_gameplay_ever_released = CASE WHEN priority_gameplay_released_at IS NOT NULL THEN 1 ELSE 0 END,
+				regular_gameplay_ever_released = CASE WHEN regular_gameplay_released_at IS NOT NULL THEN 1 ELSE 0 END;
+
+			CREATE TABLE IF NOT EXISTS mission_public_updates (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				mission_id INTEGER NOT NULL,
+				kind TEXT NOT NULL CHECK(kind IN (
+					'squads_slotting_started',
+					'priority_slotting_started',
+					'regular_slotting_started',
+					'game_started_wait_next_episode'
+				)),
+				episode_number INTEGER CHECK(episode_number IS NULL OR episode_number > 0),
+				total_episodes INTEGER CHECK(total_episodes IS NULL OR total_episodes > 0),
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				created_by_steamid64 TEXT,
+				FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_mission_public_updates_mission_created
+				ON mission_public_updates(mission_id, created_at DESC, id DESC);
+		`
 	}
 ];

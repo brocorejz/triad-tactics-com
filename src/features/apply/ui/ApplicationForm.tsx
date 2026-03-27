@@ -447,6 +447,11 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
             )}
             <p className="mt-2 text-sm leading-relaxed text-neutral-400">{t('steamAuth.help')}</p>
 
+            <div className="mt-3 rounded-xl border border-[color:var(--accent)]/20 bg-[color:var(--accent)]/5 p-3">
+              <p className="text-sm font-medium text-neutral-100">{t('steamAuth.scopeDisclaimer.title')}</p>
+              <p className="mt-1 text-sm leading-relaxed text-neutral-300">{t('steamAuth.scopeDisclaimer.body')}</p>
+            </div>
+
             <div className="mt-3 rounded-xl border border-neutral-800 bg-neutral-950/40 p-3">
               <p className="text-sm font-medium text-neutral-200">{t('steamAuth.detect.title')}</p>
               <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-neutral-300">

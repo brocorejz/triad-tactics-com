@@ -12,6 +12,7 @@ import type {
 import type {
 	ArchiveGameRequest,
 	CancelGameRequest,
+	CreateMissionUpdateRequest,
 	DeleteArchivedMissionRequest,
 	ImportGameSlottingRequest,
 	PublishGameRequest,
@@ -113,6 +114,20 @@ export type GetMissionAuditRepoResult =
 	| {
 			success: false;
 			error: 'not_found' | 'database_error';
+	  };
+
+export type CreateMissionUpdateRepoResult =
+	| { success: true; mission: GameAdminMission }
+	| {
+			success: false;
+			error: 'not_found' | 'not_published' | 'database_error';
+	  };
+
+export type UpdateMissionUpdateRepoResult =
+	| { success: true; mission: GameAdminMission }
+	| {
+			success: false;
+			error: 'not_found' | 'not_published' | 'database_error';
 	  };
 
 export type GetAdminGameMissionRepoResult =
@@ -245,6 +260,8 @@ export type GamesDraftRepo = {
 	cancelGame: (input: CancelGameRequest & { missionId: number; archivedBySteamId64: string }) => CancelGameRepoResult;
 	deleteArchivedMission: (input: DeleteArchivedMissionRequest & { missionId: number }) => DeleteArchivedMissionRepoResult;
 	getMissionAuditHistory: (input: { missionId: number }) => GetMissionAuditRepoResult;
+	createMissionUpdate: (input: CreateMissionUpdateRequest & { missionId: number; createdBySteamId64: string }) => CreateMissionUpdateRepoResult;
+	updateMissionUpdate: (input: CreateMissionUpdateRequest & { missionId: number; updateId: number; updatedBySteamId64: string }) => UpdateMissionUpdateRepoResult;
 	updateSlotting: (input: UpdateGameSlottingRequest & { missionId: number; updatedBySteamId64: string }) => UpdateGameSlottingRepoResult;
 	importSlotting: (input: ImportGameSlottingRequest & { missionId: number; updatedBySteamId64: string }) => ImportGameSlottingRepoResult;
 };
@@ -309,6 +326,14 @@ export type CancelGameDeps = {
 
 export type GetMissionAuditDeps = {
 	repo: Pick<GamesDraftRepo, 'getMissionAuditHistory'>;
+};
+
+export type CreateMissionUpdateDeps = {
+	repo: Pick<GamesDraftRepo, 'createMissionUpdate'>;
+};
+
+export type UpdateMissionUpdateDeps = {
+	repo: Pick<GamesDraftRepo, 'updateMissionUpdate'>;
 };
 
 export type GetAdminGameMissionDeps = {

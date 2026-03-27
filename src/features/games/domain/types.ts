@@ -44,6 +44,21 @@ export type GameAuditEvent = {
 	payload: GameAuditPayload;
 };
 
+export type GameMissionUpdateKind =
+	| 'squads_slotting_started'
+	| 'priority_slotting_started'
+	| 'regular_slotting_started'
+	| 'game_started_wait_next_episode';
+
+export type GameMissionUpdate = {
+	id: number;
+	kind: GameMissionUpdateKind;
+	episodeNumber: number | null;
+	totalEpisodes: number | null;
+	createdAt: string;
+	createdBySteamId64: string | null;
+};
+
 export type GameArchiveResult = {
 	outcome: 'winner' | 'draw';
 	winnerSideId: string | null;
@@ -82,6 +97,7 @@ export type GameAdminMission = {
 	finalPassword: string | null;
 	serverDetailsHidden: boolean;
 	priorityBadgeTypeIds: number[];
+	updates: GameMissionUpdate[];
 	slotting: CanonicalSlotting;
 };
 
@@ -120,6 +136,8 @@ export type GameRegularJoinParticipant = {
 export type GameMissionPassword = {
 	stage: GameMissionPasswordStage | null;
 	value: string | null;
+	waitingForViewerAccess: boolean;
+	missedJoinWindow: boolean;
 };
 
 export type GameMissionViewer = {
@@ -159,6 +177,7 @@ export type GameMissionDetail = {
 	archiveReason: string | null;
 	archiveResult: GameArchiveResult | null;
 	availablePrioritySlotCount: number;
+	updates: GameMissionUpdate[];
 	slotting: CanonicalSlotting;
 	regularJoiners: GameRegularJoinParticipant[];
 	password: GameMissionPassword;

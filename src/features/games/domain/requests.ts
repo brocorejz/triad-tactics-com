@@ -115,6 +115,60 @@ export const deleteArchivedMissionRequestSchema = z.object({
 	titleConfirmation: z.string().trim().min(1).max(200)
 });
 
+export const createMissionUpdateRequestSchema = z.object({
+	kind: z.enum([
+		'squads_slotting_started',
+		'priority_slotting_started',
+		'regular_slotting_started',
+		'game_started_wait_next_episode'
+	]),
+	episodeNumber: z.number({ error: 'episode_required' }).int().positive(),
+	totalEpisodes: z.number().int().positive().default(3)
+}).superRefine((value, ctx) => {
+	if (!Number.isInteger(value.episodeNumber) || value.episodeNumber < 1) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['episodeNumber'],
+			message: 'episode_required'
+		});
+	}
+
+	if (!Number.isInteger(value.totalEpisodes) || value.totalEpisodes < value.episodeNumber) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['totalEpisodes'],
+			message: 'total_episodes_before_episode'
+		});
+	}
+});
+
+export const updateMissionUpdateRequestSchema = z.object({
+	kind: z.enum([
+		'squads_slotting_started',
+		'priority_slotting_started',
+		'regular_slotting_started',
+		'game_started_wait_next_episode'
+	]),
+	episodeNumber: z.number({ error: 'episode_required' }).int().positive(),
+	totalEpisodes: z.number().int().positive()
+}).superRefine((value, ctx) => {
+	if (!Number.isInteger(value.episodeNumber) || value.episodeNumber < 1) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['episodeNumber'],
+			message: 'episode_required'
+		});
+	}
+
+	if (!Number.isInteger(value.totalEpisodes) || value.totalEpisodes < value.episodeNumber) {
+		ctx.addIssue({
+			code: z.ZodIssueCode.custom,
+			path: ['totalEpisodes'],
+			message: 'total_episodes_before_episode'
+		});
+	}
+});
+
 export type UpdateGameSettingsRequest = z.infer<typeof updateGameSettingsRequestSchema>;
 export type PublishGameRequest = z.infer<typeof publishGameRequestSchema>;
 export type UpdateGameSlottingRequest = z.infer<typeof updateGameSlottingRequestSchema>;
@@ -123,3 +177,5 @@ export type ClaimPrioritySlotRequest = z.infer<typeof claimPrioritySlotRequestSc
 export type ArchiveGameRequest = z.infer<typeof archiveGameRequestSchema>;
 export type CancelGameRequest = z.infer<typeof cancelGameRequestSchema>;
 export type DeleteArchivedMissionRequest = z.infer<typeof deleteArchivedMissionRequestSchema>;
+export type CreateMissionUpdateRequest = z.infer<typeof createMissionUpdateRequestSchema>;
+export type UpdateMissionUpdateRequest = z.infer<typeof updateMissionUpdateRequestSchema>;

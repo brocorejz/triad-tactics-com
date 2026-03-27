@@ -3,15 +3,18 @@ import { requireAdmin } from '@/features/admin/adapters/next/adminAuth';
 import {
 	archiveGameRequestSchema,
 	cancelGameRequestSchema,
+	createMissionUpdateRequestSchema,
 	deleteArchivedMissionRequestSchema,
 	importGameSlottingRequestSchema,
 	publishGameRequestSchema,
+	updateMissionUpdateRequestSchema,
 	updateGameSettingsRequestSchema,
 	updateGameSlottingRequestSchema
 } from '@/features/games/domain/requests';
 import {
 	archiveGameDeps,
 	cancelGameDeps,
+	createMissionUpdateDeps,
 	deleteArchivedMissionDeps,
 	getAdminGameMissionDeps,
 	getMissionAuditDeps,
@@ -21,11 +24,13 @@ import {
 	publishGameDeps,
 	releasePriorityGameplayDeps,
 	releaseRegularGameplayDeps,
+	updateMissionUpdateDeps,
 	updateGameSettingsDeps,
 	updateGameSlottingDeps
 } from '@/features/games/deps';
 import { archiveGame } from '@/features/games/useCases/archiveGame';
 import { cancelGame } from '@/features/games/useCases/cancelGame';
+import { createMissionUpdate } from '@/features/games/useCases/createMissionUpdate';
 import { deleteArchivedMission } from '@/features/games/useCases/deleteArchivedMission';
 import { getAdminGameMission } from '@/features/games/useCases/getAdminGameMission';
 import { getMissionAuditHistory } from '@/features/games/useCases/getMissionAuditHistory';
@@ -35,6 +40,7 @@ import { importGameSlotting } from '@/features/games/useCases/importGameSlotting
 import { publishGame } from '@/features/games/useCases/publishGame';
 import { releasePriorityGameplay } from '@/features/games/useCases/releasePriorityGameplay';
 import { releaseRegularGameplay } from '@/features/games/useCases/releaseRegularGameplay';
+import { updateMissionUpdate } from '@/features/games/useCases/updateMissionUpdate';
 import { updateGameSettings } from '@/features/games/useCases/updateGameSettings';
 import { updateGameSlotting } from '@/features/games/useCases/updateGameSlotting';
 import { errorToLogObject, logger } from '@/platform/logger';
@@ -42,6 +48,10 @@ import type { ZodIssue } from 'zod';
 
 type AdminGameMissionRouteContext = {
 	params: Promise<{ missionId: string }>;
+};
+
+type AdminGameMissionUpdateRouteContext = {
+	params: Promise<{ missionId: string; updateId: string }>;
 };
 
 async function readRequestBody(request: NextRequest): Promise<unknown> {
@@ -55,6 +65,15 @@ async function readMissionId(context: AdminGameMissionRouteContext): Promise<num
 	const parsed = Number(missionId);
 	if (!Number.isSafeInteger(parsed) || parsed < 1) return null;
 	return parsed;
+}
+
+async function readMissionAndUpdateIds(context: AdminGameMissionUpdateRouteContext): Promise<{ missionId: number; updateId: number } | null> {
+	const { missionId, updateId } = await context.params;
+	const parsedMissionId = Number(missionId);
+	const parsedUpdateId = Number(updateId);
+	if (!Number.isSafeInteger(parsedMissionId) || parsedMissionId < 1) return null;
+	if (!Number.isSafeInteger(parsedUpdateId) || parsedUpdateId < 1) return null;
+	return { missionId: parsedMissionId, updateId: parsedUpdateId };
 }
 
 function serializeValidationIssue(issue: ZodIssue): {
@@ -473,6 +492,101 @@ export async function postAdminGameHideRegularRoute(
 		return NextResponse.json({ success: true, mission: hidden.mission });
 	} catch (error: unknown) {
 		logger.error({ ...errorToLogObject(error) }, 'admin_game_hide_regular_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function postAdminGameMissionUpdateRoute(
+	request: NextRequest,
+	context: AdminGameMissionRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const missionId = await readMissionId(context);
+		if (!missionId) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = createMissionUpdateRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json({ error: 'validation_error', details: parsed.error.issues.map(serializeValidationIssue) }, { status: 400 });
+		}
+
+		const created = createMissionUpdate(createMissionUpdateDeps, {
+			...parsed.data,
+			missionId,
+			createdBySteamId64: admin.identity.steamid64
+		});
+
+		if (!created.ok) {
+			if (created.error === 'not_found') {
+				return NextResponse.json({ error: 'not_found' }, { status: 404 });
+			}
+
+			const status = created.error === 'database_error' ? 500 : 409;
+			return NextResponse.json({ error: created.error }, { status });
+		}
+
+		return NextResponse.json({ success: true, mission: created.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_update_create_failed');
+		return NextResponse.json({ error: 'server_error' }, { status: 500 });
+	}
+}
+
+export async function putAdminGameMissionUpdateRoute(
+	request: NextRequest,
+	context: AdminGameMissionUpdateRouteContext
+): Promise<NextResponse> {
+	try {
+		const admin = requireAdmin(request);
+		if (!admin.ok) return admin.response;
+
+		const ids = await readMissionAndUpdateIds(context);
+		if (!ids) {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		let body: unknown;
+		try {
+			body = await readRequestBody(request);
+		} catch {
+			return NextResponse.json({ error: 'validation_error' }, { status: 400 });
+		}
+
+		const parsed = updateMissionUpdateRequestSchema.safeParse(body);
+		if (!parsed.success) {
+			return NextResponse.json({ error: 'validation_error', details: parsed.error.issues.map(serializeValidationIssue) }, { status: 400 });
+		}
+
+		const updated = updateMissionUpdate(updateMissionUpdateDeps, {
+			...parsed.data,
+			missionId: ids.missionId,
+			updateId: ids.updateId,
+			updatedBySteamId64: admin.identity.steamid64
+		});
+
+		if (!updated.ok) {
+			if (updated.error === 'not_found') {
+				return NextResponse.json({ error: 'not_found' }, { status: 404 });
+			}
+
+			const status = updated.error === 'database_error' ? 500 : 409;
+			return NextResponse.json({ error: updated.error }, { status });
+		}
+
+		return NextResponse.json({ success: true, mission: updated.mission });
+	} catch (error: unknown) {
+		logger.error({ ...errorToLogObject(error) }, 'admin_game_update_edit_failed');
 		return NextResponse.json({ error: 'server_error' }, { status: 500 });
 	}
 }

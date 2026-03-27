@@ -7,7 +7,7 @@ import type { GameArchiveResult, GameArchiveStatus, GameMissionDetail } from '@/
 import type { AppLocale } from '@/i18n/locales';
 import { sideDisplayName } from '@/features/games/domain/slotting';
 import { useRouter } from '@/i18n/routing';
-import { formatTimeZoneDisplay, parseDateTimeValue } from '@/platform/dateTime';
+import { formatLocalizedDateTime, formatTimeZoneDisplay, parseDateTimeValue } from '@/platform/dateTime';
 import { useCurrentTime } from '@/platform/useCurrentTime';
 import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 import {
@@ -16,10 +16,12 @@ import {
 	buildSideRows,
 	buildSlottingSummary,
 	findHeldSlotSummary,
+	formatMissionUpdateMessage,
 	formatCountdownValue,
 	formatViewerDate,
 	getCountdownParts,
 	missionStatusLabel,
+	slotAccessLabel,
 	slottingTableWidthRem
 } from './missionPageUtils';
 import { useMissionActions } from './useMissionActions';
@@ -37,7 +39,7 @@ export default function GameMissionPage({ mission }: { mission: GameMissionDetai
 	const { timeZone, hourCycle } = useViewerDateTimePreferences();
 	const now = useCurrentTime();
 	const { actionError, clearActionError, pendingActionId, busy, runAction } = useMissionActions(t);
-	const [pendingConfirm, setPendingConfirm] = useState<{ kind: 'switch' | 'leave'; action: () => void } | null>(null);
+	const [pendingConfirm, setPendingConfirm] = useState<{ kind: 'switch' | 'leave-slot' | 'leave-regular'; action: () => void } | null>(null);
 	const guide = useMissionGuide();
 
 	const startDate = mission.startsAt ? parseDateTimeValue(mission.startsAt) : null;
@@ -49,6 +51,27 @@ export default function GameMissionPage({ mission }: { mission: GameMissionDetai
 	const archivedAt = formatViewerDate(mission.archivedAt, locale, timeZone, hourCycle);
 	const heldSlotSummary = findHeldSlotSummary(mission.slotting, mission.viewer.heldSlotId);
 	const slottingSummary = buildSlottingSummary(mission.slotting, mission.viewer.heldSlotId);
+
+	const confirmTitle =
+		pendingConfirm?.kind === 'switch'
+			? t('confirmSwitchTitle')
+			: pendingConfirm?.kind === 'leave-regular'
+				? t('confirmLeaveRegularTitle')
+				: t('confirmLeaveTitle');
+
+	const confirmText =
+		pendingConfirm?.kind === 'switch'
+			? t('confirmSwitchText')
+			: pendingConfirm?.kind === 'leave-regular'
+				? t('confirmLeaveRegularText')
+				: t('confirmLeaveText');
+
+	const confirmAcceptLabel =
+		pendingConfirm?.kind === 'switch'
+			? t('confirmSwitchAccept')
+			: pendingConfirm?.kind === 'leave-regular'
+				? t('confirmLeaveRegularAccept')
+				: t('confirmLeaveAccept');
 
 	return (
 		<section className="grid gap-6">
@@ -63,6 +86,10 @@ export default function GameMissionPage({ mission }: { mission: GameMissionDetai
 				timeZone={timeZone}
 				t={t}
 			/>
+
+			{mission.status === 'published' ? <MissionAccessNoticeSection t={t} /> : null}
+
+			<MissionUpdatesSection mission={mission} t={t} />
 
 			{mission.status === 'archived' && mission.archiveResult ? (
 				<ResultsSection
@@ -105,10 +132,10 @@ export default function GameMissionPage({ mission }: { mission: GameMissionDetai
 					>
 						<div role="alertdialog" aria-modal="true" className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-950/95 p-6 shadow-xl">
 							<p className="text-sm font-semibold text-neutral-100">
-								{pendingConfirm.kind === 'switch' ? t('confirmSwitchTitle') : t('confirmLeaveTitle')}
+								{confirmTitle}
 							</p>
 							<p className="mt-2 text-sm text-neutral-400">
-								{pendingConfirm.kind === 'switch' ? t('confirmSwitchText') : t('confirmLeaveText')}
+								{confirmText}
 							</p>
 							<div className="mt-4 flex justify-end gap-2">
 								<button
@@ -126,7 +153,7 @@ export default function GameMissionPage({ mission }: { mission: GameMissionDetai
 										setPendingConfirm(null);
 									}}
 								>
-									{pendingConfirm.kind === 'switch' ? t('confirmSwitchAccept') : t('confirmLeaveAccept')}
+									{confirmAcceptLabel}
 								</button>
 							</div>
 						</div>
@@ -142,6 +169,7 @@ export default function GameMissionPage({ mission }: { mission: GameMissionDetai
 				busy={busy}
 				pendingActionId={pendingActionId}
 				runAction={runAction}
+				confirmAction={setPendingConfirm}
 				guideShow={guide.show}
 				t={t}
 			/>
@@ -157,6 +185,90 @@ export default function GameMissionPage({ mission }: { mission: GameMissionDetai
 				guideShow={guide.show}
 				t={t}
 			/>
+		</section>
+	);
+}
+
+function MissionAccessNoticeSection({
+	t
+}: {
+	t: ReturnType<typeof useTranslations<'games'>>;
+}) {
+	return (
+		<section className="relative overflow-hidden rounded-2xl border border-amber-500/35 bg-gradient-to-br from-amber-500/12 via-amber-500/8 to-red-500/8 p-5 shadow-sm shadow-black/20 sm:p-6">
+			<div className="pointer-events-none absolute -top-20 right-8 h-40 w-40 rounded-full bg-amber-400/20 blur-3xl" aria-hidden="true" />
+			<div className="pointer-events-none absolute -bottom-24 left-6 h-48 w-48 rounded-full bg-red-500/10 blur-3xl" aria-hidden="true" />
+			<div className="relative grid gap-3">
+				<p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-200">{t('missionAccessNoticeTitle')}</p>
+				<p className="max-w-5xl text-base font-semibold leading-8 text-neutral-50">{t('missionAccessNoticeBody')}</p>
+				<ul className="list-disc space-y-2 pl-5 text-sm leading-7 text-amber-50/95">
+					<li>{t('missionAccessNoticeSquad')}</li>
+					<li>{t('missionAccessNoticePriority')}</li>
+					<li>{t('missionAccessNoticeRegular')}</li>
+				</ul>
+			</div>
+		</section>
+	);
+}
+
+function MissionUpdatesSection({
+	mission,
+	t
+}: {
+	mission: GameMissionDetail;
+	t: ReturnType<typeof useTranslations<'games'>>;
+}) {
+	const locale = useLocale();
+	const { timeZone, hourCycle } = useViewerDateTimePreferences();
+	const latestUpdate = mission.updates[0] ?? null;
+	const previousUpdates = mission.updates.slice(1);
+
+	if (!latestUpdate) {
+		return null;
+	}
+
+	return (
+		<section className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-gradient-to-br from-neutral-950 via-neutral-950 to-neutral-900 p-5 shadow-sm shadow-black/20 sm:p-6">
+			<div className="pointer-events-none absolute -top-20 right-8 h-40 w-40 rounded-full bg-[color:var(--accent)]/20 blur-3xl" aria-hidden="true" />
+			<div className="pointer-events-none absolute -bottom-24 left-6 h-48 w-48 rounded-full bg-[color:var(--accent)]/10 blur-3xl" aria-hidden="true" />
+			<div className="relative grid gap-4">
+				<div>
+					<p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-400">{t('missionUpdatesTitle')}</p>
+					<p className="mt-2 max-w-4xl text-sm text-neutral-300">{t('missionUpdatesSubtitle')}</p>
+				</div>
+
+				<div className="rounded-2xl border border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 px-4 py-4">
+					<div className="flex flex-wrap items-center gap-3">
+						<span className="inline-flex items-center rounded-full border border-[color:var(--accent)]/30 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--accent)]">
+							{t('missionUpdatesLatestBadge')}
+						</span>
+						<span className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-300">
+							{formatLocalizedDateTime(latestUpdate.createdAt, { locale, timeZone, hourCycle, dateStyle: 'medium', timeStyle: 'short' }) ?? latestUpdate.createdAt}
+						</span>
+					</div>
+					<p className="mt-3 text-base font-semibold text-neutral-50">{formatMissionUpdateMessage(latestUpdate, t)}</p>
+				</div>
+
+				{previousUpdates.length > 0 ? (
+					<div className="rounded-2xl border border-neutral-800 bg-neutral-950/70">
+						<div className="border-b border-neutral-800 px-4 py-3">
+							<p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-500">{t('missionUpdatesHistoryTitle')}</p>
+						</div>
+						<div className="max-h-72 overflow-y-auto px-4 py-3">
+							<div className="grid gap-3">
+								{previousUpdates.map((update) => (
+									<div key={update.id} className="rounded-xl border border-neutral-800 bg-black/20 px-4 py-3">
+										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+											{formatLocalizedDateTime(update.createdAt, { locale, timeZone, hourCycle, dateStyle: 'medium', timeStyle: 'short' }) ?? update.createdAt}
+										</p>
+										<p className="mt-2 text-sm leading-7 text-neutral-200">{formatMissionUpdateMessage(update, t)}</p>
+									</div>
+								))}
+							</div>
+						</div>
+					</div>
+				) : null}
+			</div>
 		</section>
 	);
 }
@@ -282,6 +394,7 @@ function ServerSection({
 	const passwordStageLabel = mission.password.stage === 'final' ? t('passwordFinalLabel') : t('passwordEarlyLabel');
 	const copyLabel = t('copyValueAction');
 	const copiedLabel = t('copiedValueAction');
+	const viewerAccessLevel = slotAccessLabel(mission.viewer.heldSlotAccess ?? 'regular', t);
 
 	return (
 		<section className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-gradient-to-br from-neutral-950 via-neutral-950 to-neutral-900 p-5 shadow-sm shadow-black/20 sm:p-6">
@@ -322,7 +435,13 @@ function ServerSection({
 							) : (
 								<div className="rounded-2xl border border-neutral-800 bg-neutral-950/70 px-4 py-3">
 									<p className="text-sm leading-7 text-neutral-300">
-										{mission.status === 'archived' ? t('passwordArchivedHidden') : t('passwordRestrictedHidden')}
+										{mission.status === 'archived'
+											? t('passwordArchivedHidden')
+											: mission.password.missedJoinWindow
+												? t('passwordMissedMissionStart')
+												: mission.password.waitingForViewerAccess
+													? t('passwordWaitingForAccessLevel', { accessLevel: viewerAccessLevel })
+													: t('passwordRestrictedHidden')}
 									</p>
 								</div>
 							)}
@@ -352,6 +471,7 @@ function RegularJoinSection({
 	busy,
 	pendingActionId,
 	runAction,
+	confirmAction,
 	guideShow,
 	t
 }: {
@@ -359,6 +479,7 @@ function RegularJoinSection({
 	busy: boolean;
 	pendingActionId: string | null;
 	runAction: RunAction;
+	confirmAction: (pending: { kind: 'switch' | 'leave-slot' | 'leave-regular'; action: () => void }) => void;
 	guideShow: () => void;
 	t: ReturnType<typeof useTranslations<'games'>>;
 }) {
@@ -373,6 +494,7 @@ function RegularJoinSection({
 
 	const regularJoinUnavailableReason = (() => {
 		if (mission.status === 'archived') return t('regularJoinUnavailableArchived');
+		if (mission.password.missedJoinWindow) return t('regularJoinUnavailableMissedWindow');
 		if (mission.viewer.heldSlotId) return t('regularJoinUnavailableHeldSlot');
 		if (mission.viewer.joinedRegular) return t('regularJoinUnavailableAlreadyJoined');
 		if (!mission.regularJoinOpen) return t('regularJoinUnavailableClosed');
@@ -436,9 +558,12 @@ function RegularJoinSection({
 								type="button"
 								disabled={busy}
 								onClick={() => {
-									void runAction({
-										id: 'leave-regular',
-										path: `/api/games/${mission.shortCode}/leave`
+									confirmAction({
+										kind: 'leave-regular',
+										action: () => void runAction({
+											id: 'leave-regular',
+											path: `/api/games/${mission.shortCode}/leave`
+										})
 									});
 								}}
 								className="inline-flex min-h-12 items-center rounded-xl border border-neutral-700 bg-white/5 px-5 py-2.5 text-sm font-semibold text-neutral-100 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
@@ -640,7 +765,7 @@ function SlottingSection({
 	runAction: RunAction;
 	heldSlotSummary: HeldSlotSummary;
 	slottingSummary: SlottingSideSummary[];
-	confirmAction: (pending: { kind: 'switch' | 'leave'; action: () => void }) => void;
+	confirmAction: (pending: { kind: 'switch' | 'leave-slot' | 'leave-regular'; action: () => void }) => void;
 	guideShow: () => void;
 	t: ReturnType<typeof useTranslations<'games'>>;
 }) {
@@ -713,7 +838,7 @@ function SlottingSection({
 							disabled={busy}
 							onClick={() => {
 								confirmAction({
-									kind: 'leave',
+															kind: 'leave-slot',
 									action: () => void runAction({
 										id: 'leave-slot',
 										path: `/api/games/${mission.shortCode}/leave-slot`
@@ -857,7 +982,7 @@ function SlottingBoards({
 	busy: boolean;
 	pendingActionId: string | null;
 	runAction: RunAction;
-	confirmAction: (pending: { kind: 'switch' | 'leave'; action: () => void }) => void;
+	confirmAction: (pending: { kind: 'switch' | 'leave-slot' | 'leave-regular'; action: () => void }) => void;
 	t: ReturnType<typeof useTranslations<'games'>>;
 	className?: string;
 }) {
@@ -960,7 +1085,7 @@ function SlottingBoards({
 															}}
 															onLeave={() => {
 																confirmAction({
-																	kind: 'leave',
+																	kind: 'leave-slot',
 																	action: () => void runAction({
 																		id: 'leave-slot',
 																		path: `/api/games/${mission.shortCode}/leave-slot`
@@ -999,7 +1124,7 @@ function SlottingFullscreenOverlay({
 	busy: boolean;
 	pendingActionId: string | null;
 	runAction: RunAction;
-	confirmAction: (pending: { kind: 'switch' | 'leave'; action: () => void }) => void;
+	confirmAction: (pending: { kind: 'switch' | 'leave-slot' | 'leave-regular'; action: () => void }) => void;
 	isRefreshing: boolean;
 	onRefresh: () => void;
 	onClose: () => void;

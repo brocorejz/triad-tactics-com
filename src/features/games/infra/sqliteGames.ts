@@ -8,6 +8,7 @@ import {
 	parseCanonicalSlotting
 } from '@/features/games/domain/slotting';
 import type {
+	CreateMissionUpdateRequest,
 	DeleteArchivedMissionRequest,
 	ImportGameSlottingRequest,
 	PublishGameRequest,
@@ -24,6 +25,7 @@ import type {
 	GameArchiveResult,
 	GameMissionDetail,
 	GameMissionPassword,
+	GameMissionUpdate,
 	GamePriorityClaimManualState,
 	GameRegularJoinParticipant,
 	GamePublishValidationError,
@@ -33,6 +35,7 @@ import { appLocales } from '@/i18n/locales';
 import type {
 	GetMissionAuditRepoResult,
 	ClaimPrioritySlotRepoResult,
+	CreateMissionUpdateRepoResult,
 	CreateGameDraftRepoResult,
 	DeleteArchivedMissionRepoResult,
 	DeleteCurrentDraftRepoResult,
@@ -74,6 +77,8 @@ type MissionRow = {
 	regular_join_enabled: number | boolean;
 	priority_gameplay_released_at: string | null;
 	regular_gameplay_released_at: string | null;
+	priority_gameplay_ever_released: number | boolean;
+	regular_gameplay_ever_released: number | boolean;
 	published_at: string | null;
 	archived_at: string | null;
 	archive_status: GameArchiveStatus | null;
@@ -103,6 +108,15 @@ type MissionAuditRow = {
 	actor_steamid64: string | null;
 	actor_callsign: string | null;
 	payload: string;
+};
+
+type MissionUpdateRow = {
+	id: number;
+	kind: GameMissionUpdate['kind'];
+	episode_number: number | null;
+	total_episodes: number | null;
+	created_at: string;
+	created_by_steamid64: string | null;
 };
 
 function isNonEmptyText(value: string | null | undefined): boolean {
@@ -198,6 +212,25 @@ function parseAuditPayload(raw: string): GameAuditEvent['payload'] {
 	}
 }
 
+function selectMissionUpdates(db: DbConnection, missionId: number): GameMissionUpdate[] {
+	const rows = db.prepare(`
+		SELECT id, kind, episode_number, total_episodes, created_at, created_by_steamid64
+		FROM mission_public_updates
+		WHERE mission_id = ?
+		ORDER BY created_at DESC, id DESC
+		LIMIT 20
+	`).all(missionId) as MissionUpdateRow[];
+
+	return rows.map((row) => ({
+		id: row.id,
+		kind: row.kind,
+		episodeNumber: row.episode_number ?? null,
+		totalEpisodes: row.total_episodes ?? null,
+		createdAt: row.created_at,
+		createdBySteamId64: row.created_by_steamid64 ?? null
+	}));
+}
+
 function mapArchiveSummaryRow(row: MissionRow): GameArchiveSummary | null {
 	if (!row.short_code || !row.archive_status) {
 		return null;
@@ -248,6 +281,7 @@ function mapMissionRow(db: DbConnection, row: MissionRow): GameAdminMission {
 		finalPassword: row.final_password ?? null,
 		serverDetailsHidden: !!row.server_details_hidden,
 		priorityBadgeTypeIds: selectPriorityBadgeTypeIds(db, row.id),
+		updates: selectMissionUpdates(db, row.id),
 		slotting: parseCanonicalSlotting(row.slotting_json)
 	};
 }
@@ -271,6 +305,8 @@ function selectMissionColumns() {
 		regular_join_enabled,
 		priority_gameplay_released_at,
 		regular_gameplay_released_at,
+		priority_gameplay_ever_released,
+		regular_gameplay_ever_released,
 		published_at,
 		archived_at,
 		archive_status,
@@ -289,7 +325,7 @@ function selectMissionColumns() {
 }
 
 function isPriorityClaimOpen(row: MissionRow): boolean {
-	if (row.priority_gameplay_released_at) return false;
+	if (row.priority_gameplay_released_at || row.priority_gameplay_ever_released) return false;
 	if (row.priority_claim_manual_state === 'open') return true;
 	if (row.priority_claim_manual_state === 'closed') return false;
 	if (!row.priority_claim_opens_at) return false;
@@ -298,8 +334,8 @@ function isPriorityClaimOpen(row: MissionRow): boolean {
 
 function isRegularJoinOpen(row: MissionRow, slotting: ReturnType<typeof parseCanonicalSlotting>): boolean {
 	if (!row.regular_join_enabled) return false;
-	if (row.priority_gameplay_released_at) return false;
-	if (row.regular_gameplay_released_at) return false;
+	if (row.priority_gameplay_released_at || row.priority_gameplay_ever_released) return false;
+	if (row.regular_gameplay_released_at || row.regular_gameplay_ever_released) return false;
 	return hasRegularSlots(slotting);
 }
 
@@ -518,32 +554,107 @@ function resolveMissionPasswordForViewer(input: {
 	row: MissionRow;
 	slotting: ReturnType<typeof parseCanonicalSlotting>;
 	viewerUserId: number;
+	joinedRegular: boolean;
 }): GameMissionPassword {
 	const heldSlot = findUserHeldSlot(input.slotting, input.viewerUserId);
 	const hasPriorityGameplayAccess = heldSlot?.slot.access === 'priority';
 	const hasRegularGameplayAccess = input.row.regular_gameplay_released_at
 		? userHasMissionRegularGameplayAccess(input.db, input.row.id, input.viewerUserId)
 		: false;
+	const hasFinalGameplayAccess = hasPriorityGameplayAccess || hasRegularGameplayAccess;
+	const missionStarted = input.row.starts_at ? new Date(input.row.starts_at).getTime() <= Date.now() : false;
+	const regularJoinOpen = isRegularJoinOpen(input.row, input.slotting);
+	const priorityGameplayEverReleased = !!input.row.priority_gameplay_ever_released;
+	const regularGameplayEverReleased = !!input.row.regular_gameplay_ever_released;
+	const missedJoinWindow =
+		((input.row.regular_gameplay_released_at !== null || regularGameplayEverReleased) && !hasFinalGameplayAccess && !heldSlot) ||
+		(
+			missionStarted &&
+			!hasFinalGameplayAccess &&
+			!heldSlot &&
+			!input.joinedRegular &&
+			!regularJoinOpen &&
+			!priorityGameplayEverReleased &&
+			!regularGameplayEverReleased
+		);
 
 	if (input.row.priority_gameplay_released_at) {
-		if (hasPriorityGameplayAccess || hasRegularGameplayAccess) {
+		if (hasFinalGameplayAccess) {
 			if (input.row.final_password) {
 				return {
 					stage: 'final',
-					value: input.row.final_password
+					value: input.row.final_password,
+					waitingForViewerAccess: false,
+					missedJoinWindow: false
 				};
 			}
+
+			return {
+				stage: 'early',
+				value: input.row.early_password ?? null,
+				waitingForViewerAccess: false,
+				missedJoinWindow: false
+			};
+		}
+
+		if (missedJoinWindow) {
+			return {
+				stage: null,
+				value: null,
+				waitingForViewerAccess: false,
+				missedJoinWindow: true
+			};
+		}
+
+		if (!input.row.regular_gameplay_released_at) {
+			return {
+				stage: null,
+				value: null,
+				waitingForViewerAccess: true,
+				missedJoinWindow: false
+			};
 		}
 
 		return {
 			stage: 'early',
-			value: input.row.early_password ?? null
+			value: input.row.early_password ?? null,
+			waitingForViewerAccess: false,
+			missedJoinWindow: false
+		};
+	}
+
+	if (priorityGameplayEverReleased || regularGameplayEverReleased) {
+		if (missedJoinWindow) {
+			return {
+				stage: null,
+				value: null,
+				waitingForViewerAccess: false,
+				missedJoinWindow: true
+			};
+		}
+
+		return {
+			stage: null,
+			value: null,
+			waitingForViewerAccess: false,
+			missedJoinWindow: false
+		};
+	}
+
+	if (missedJoinWindow) {
+		return {
+			stage: null,
+			value: null,
+			waitingForViewerAccess: false,
+			missedJoinWindow: true
 		};
 	}
 
 	return {
 		stage: 'early',
-		value: input.row.early_password ?? null
+		value: input.row.early_password ?? null,
+		waitingForViewerAccess: false,
+		missedJoinWindow: false
 	};
 }
 
@@ -586,6 +697,7 @@ function mapMissionDetailForViewer(input: {
 		archiveReason: input.row.archive_reason ?? null,
 		archiveResult: parseStoredArchiveResult(input.row.archive_result_json ?? null),
 		availablePrioritySlotCount,
+		updates: selectMissionUpdates(input.db, input.row.id),
 		slotting,
 		regularJoiners,
 		password: isPublished
@@ -593,9 +705,10 @@ function mapMissionDetailForViewer(input: {
 				db: input.db,
 				row: input.row,
 				slotting,
-				viewerUserId: input.viewer.id
+				viewerUserId: input.viewer.id,
+				joinedRegular
 			})
-			: { stage: null, value: null },
+			: { stage: null, value: null, waitingForViewerAccess: false, missedJoinWindow: false },
 		viewer: {
 			userId: input.viewer.id,
 			steamId64: input.steamId64,
@@ -1376,6 +1489,7 @@ export function releasePriorityGameplay(input: {
 	const releaseMission = db.prepare(`
 		UPDATE missions
 		SET priority_gameplay_released_at = CURRENT_TIMESTAMP,
+			priority_gameplay_ever_released = 1,
 			priority_claim_manual_state = 'closed',
 			regular_join_enabled = 0,
 			updated_at = CURRENT_TIMESTAMP,
@@ -1458,6 +1572,7 @@ export function releaseRegularGameplay(input: {
 	const releaseMission = db.prepare(`
 		UPDATE missions
 		SET regular_gameplay_released_at = CURRENT_TIMESTAMP,
+			regular_gameplay_ever_released = 1,
 			updated_at = CURRENT_TIMESTAMP,
 			updated_by_steamid64 = ?
 		WHERE id = ? AND regular_gameplay_released_at IS NULL
@@ -1753,6 +1868,133 @@ export function archiveGame(input: {
 					archiveResult
 				})
 			);
+
+			return { success: true as const, mission: mapMissionRow(db, updated) };
+		});
+
+		return run();
+	} catch {
+		return { success: false, error: 'database_error' };
+	}
+}
+
+export function createMissionUpdate(input: CreateMissionUpdateRequest & {
+	missionId: number;
+	createdBySteamId64: string;
+}): CreateMissionUpdateRepoResult {
+	const db = getDb();
+	const selectMission = db.prepare(`
+		SELECT ${selectMissionColumns()}
+		FROM missions
+		WHERE id = ?
+		LIMIT 1
+	`);
+	const insertUpdate = db.prepare(`
+		INSERT INTO mission_public_updates (mission_id, kind, episode_number, total_episodes, created_by_steamid64)
+		VALUES (?, ?, ?, ?, ?)
+	`);
+	const insertAudit = db.prepare(`
+		INSERT INTO mission_audit_events (mission_id, actor_steamid64, event_type, payload)
+		VALUES (?, ?, 'mission.public_update.created', ?)
+	`);
+
+	try {
+		const run = db.transaction((): CreateMissionUpdateRepoResult => {
+			const row = selectMission.get(input.missionId) as MissionRow | undefined;
+			if (!row) {
+				return { success: false, error: 'not_found' };
+			}
+
+			if (row.status !== 'published') {
+				return { success: false, error: 'not_published' };
+			}
+
+			insertUpdate.run(input.missionId, input.kind, input.episodeNumber, input.totalEpisodes, input.createdBySteamId64);
+			insertAudit.run(
+				input.missionId,
+				input.createdBySteamId64,
+				JSON.stringify({
+					kind: input.kind,
+					episodeNumber: input.episodeNumber,
+					totalEpisodes: input.totalEpisodes,
+					shortCode: row.short_code ?? null
+				})
+			);
+
+			const updated = selectMission.get(input.missionId) as MissionRow | undefined;
+			if (!updated) {
+				return { success: false, error: 'database_error' };
+			}
+
+			return { success: true, mission: mapMissionRow(db, updated) };
+		});
+
+		return run();
+	} catch {
+		return { success: false, error: 'database_error' };
+	}
+}
+
+export function updateMissionUpdate(input: CreateMissionUpdateRequest & {
+	missionId: number;
+	updateId: number;
+	updatedBySteamId64: string;
+}): import('@/features/games/ports').UpdateMissionUpdateRepoResult {
+	const db = getDb();
+	const selectMission = db.prepare(`
+		SELECT ${selectMissionColumns()}
+		FROM missions
+		WHERE id = ?
+		LIMIT 1
+	`);
+	const updateExisting = db.prepare(`
+		UPDATE mission_public_updates
+		SET kind = ?, episode_number = ?, total_episodes = ?
+		WHERE id = ? AND mission_id = ?
+	`);
+	const insertAudit = db.prepare(`
+		INSERT INTO mission_audit_events (mission_id, actor_steamid64, event_type, payload)
+		VALUES (?, ?, 'mission.public_update.updated', ?)
+	`);
+
+	try {
+		const run = db.transaction(() => {
+			const row = selectMission.get(input.missionId) as MissionRow | undefined;
+			if (!row) {
+				return { success: false as const, error: 'not_found' as const };
+			}
+
+			if (row.status !== 'published') {
+				return { success: false as const, error: 'not_published' as const };
+			}
+
+			const result = updateExisting.run(
+				input.kind,
+				input.episodeNumber,
+				input.totalEpisodes,
+				input.updateId,
+				input.missionId
+			);
+			if (result.changes < 1) {
+				return { success: false as const, error: 'not_found' as const };
+			}
+
+			insertAudit.run(
+				input.missionId,
+				input.updatedBySteamId64,
+				JSON.stringify({
+					updateId: input.updateId,
+					kind: input.kind,
+					episodeNumber: input.episodeNumber,
+					totalEpisodes: input.totalEpisodes,
+					shortCode: row.short_code ?? null
+				})
+			);
+
+			const updated = selectMission.get(input.missionId) as MissionRow | undefined;
+			if (!updated) {
+				return { success: false as const, error: 'database_error' as const };
+			}
 
 			return { success: true as const, mission: mapMissionRow(db, updated) };
 		});

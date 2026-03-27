@@ -318,7 +318,7 @@ describe('Admin game archive endpoints (integration)', () => {
 				archiveStatus: 'canceled',
 				archiveReason: 'Server outage',
 				archiveResult: null,
-				password: { stage: null, value: null },
+				password: { stage: null, value: null, waitingForViewerAccess: false, missedJoinWindow: false },
 				priorityClaimOpen: false,
 				regularJoinOpen: false,
 				viewer: expect.objectContaining({

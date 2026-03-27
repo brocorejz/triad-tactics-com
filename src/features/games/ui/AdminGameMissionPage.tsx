@@ -21,6 +21,7 @@ import { sideDisplayName } from '@/features/games/domain/slotting';
 import { formatLocalizedDateTime } from '@/platform/dateTime';
 import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 import { SlottingPreview } from './SlottingPreview';
+import { formatMissionUpdateMessage } from './missionPageUtils';
 
 type SettingsFormState = {
 	title: string;
@@ -203,6 +204,7 @@ async function fetchAdminStatus(): Promise<AdminStatus> {
 
 export default function AdminGameMissionPage() {
 	const ta = useTranslations('admin');
+	const tg = useTranslations('games');
 	const pathname = usePathname();
 	const params = useParams();
 	const localeParam = (params.locale as string) || 'en';
@@ -223,6 +225,9 @@ export default function AdminGameMissionPage() {
 	const [sideScores, setSideScores] = useState<Record<string, string>>({});
 	const [cancelReason, setCancelReason] = useState('');
 	const [titleConfirmation, setTitleConfirmation] = useState('');
+	const [missionUpdateEpisodeNumber, setMissionUpdateEpisodeNumber] = useState('');
+	const [missionUpdateTotalEpisodes, setMissionUpdateTotalEpisodes] = useState('3');
+	const [editingMissionUpdateId, setEditingMissionUpdateId] = useState<number | null>(null);
 	const [auditEvents, setAuditEvents] = useState<GameAuditEvent[]>([]);
 	const [auditState, setAuditState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
 	const [badgeCatalog, setBadgeCatalog] = useState<AdminBadgeType[]>([]);
@@ -647,6 +652,73 @@ export default function AdminGameMissionPage() {
 		}
 	};
 
+	const handleEditMissionUpdate = (update: AdminGameMissionDetail['updates'][number]) => {
+		setEditingMissionUpdateId(update.id);
+		setMissionUpdateEpisodeNumber(update.episodeNumber ? String(update.episodeNumber) : '');
+		setMissionUpdateTotalEpisodes(update.totalEpisodes ? String(update.totalEpisodes) : '3');
+	};
+
+	const cancelMissionUpdateEditing = () => {
+		setEditingMissionUpdateId(null);
+		setMissionUpdateEpisodeNumber('');
+		setMissionUpdateTotalEpisodes('3');
+	};
+
+	const handleCreateMissionUpdate = async (kind: 'squads_slotting_started' | 'priority_slotting_started' | 'regular_slotting_started' | 'game_started_wait_next_episode') => {
+		if (!mission) return;
+
+		if (!/^\d+$/.test(missionUpdateEpisodeNumber.trim())) {
+			setFeedback({ tone: 'error', message: ta('gamesMissionUpdatesEpisodeRequired') });
+			return;
+		}
+
+		if (!/^\d+$/.test(missionUpdateTotalEpisodes.trim())) {
+			setFeedback({ tone: 'error', message: ta('gamesMissionUpdatesTotalEpisodesInvalid') });
+			return;
+		}
+
+		const episodeNumber = Number.parseInt(missionUpdateEpisodeNumber, 10);
+		const totalEpisodes = Number.parseInt(missionUpdateTotalEpisodes, 10);
+
+		if (!Number.isInteger(episodeNumber) || episodeNumber < 1) {
+			setFeedback({ tone: 'error', message: ta('gamesMissionUpdatesEpisodeRequired') });
+			return;
+		}
+
+		if (!Number.isInteger(totalEpisodes) || totalEpisodes < episodeNumber) {
+			setFeedback({ tone: 'error', message: ta('gamesMissionUpdatesTotalEpisodesInvalid') });
+			return;
+		}
+
+		try {
+			setFeedback(null);
+			setActiveAction('mission-update');
+			const isEditing = editingMissionUpdateId !== null;
+			const res = await fetch(
+				isEditing
+					? `/api/admin/games/${mission.id}/updates/${editingMissionUpdateId}`
+					: `/api/admin/games/${mission.id}/updates`,
+				{
+				method: isEditing ? 'PUT' : 'POST',
+				headers: { 'content-type': 'application/json', Accept: 'application/json' },
+				body: JSON.stringify({
+					kind,
+					episodeNumber,
+					totalEpisodes
+				})
+			});
+			const json: unknown = (await res.json()) as unknown;
+			const ok = await applyLifecycleResponse(res, json, isEditing ? ta('gamesMissionUpdatesSaveAction') : ta('gamesMissionUpdatesPostAction'));
+			if (ok) {
+				cancelMissionUpdateEditing();
+			}
+		} catch {
+			setFeedback({ tone: 'error', message: `${ta('gamesActionFailedPrefix')} ${editingMissionUpdateId !== null ? ta('gamesMissionUpdatesSaveAction') : ta('gamesMissionUpdatesPostAction')}: server error` });
+		} finally {
+			setActiveAction(null);
+		}
+	};
+
 	const handleArchive = async () => {
 		if (!mission) return;
 		const sideScoreList = mission.slotting.sides.map((side) => {
@@ -1015,6 +1087,78 @@ export default function AdminGameMissionPage() {
 																<AdminButton variant="secondary" onClick={() => setConfirmAction({ title: ta('gamesConfirmHideRegularTitle'), description: ta('gamesConfirmHideRegularText'), confirmLabel: ta('gamesHideRegularAction'), onConfirm: () => { setConfirmAction(null); void handleSimpleMissionAction(`/api/admin/games/${mission.id}/hide-regular`, 'gamesHideRegularAction'); } })} disabled={activeAction !== null || mission.status !== 'published' || !mission.regularGameplayReleasedAt}>
 																	{activeAction === 'gamesHideRegularAction' ? ta('gamesHidingRegular') : ta('gamesHideRegularAction')}
 																</AdminButton>
+														</div>
+													</ActionCard>
+
+													<ActionCard title={ta('gamesMissionUpdatesSectionTitle')} description={ta('gamesMissionUpdatesSectionText')}>
+														<div className="grid gap-4">
+															<label className="grid gap-2 text-sm text-neutral-200">
+																<span>{ta('gamesMissionUpdatesEpisodeNumberLabel')}</span>
+																<input
+																	type="number"
+																	min={1}
+																	value={missionUpdateEpisodeNumber}
+																	onChange={(event) => setMissionUpdateEpisodeNumber(event.target.value)}
+																	placeholder={ta('gamesMissionUpdatesEpisodeNumberPlaceholder')}
+																	className={editorInputClass}
+																/>
+															</label>
+															<label className="grid gap-2 text-sm text-neutral-200">
+																<span>{ta('gamesMissionUpdatesTotalEpisodesLabel')}</span>
+																<input
+																	type="number"
+																	min={1}
+																	value={missionUpdateTotalEpisodes}
+																	onChange={(event) => setMissionUpdateTotalEpisodes(event.target.value)}
+																	placeholder={ta('gamesMissionUpdatesTotalEpisodesPlaceholder')}
+																	className={editorInputClass}
+																/>
+															</label>
+															<p className="text-xs text-neutral-500">{ta('gamesMissionUpdatesEpisodeHelp')}</p>
+															<p className="text-xs text-neutral-500">{ta('gamesMissionUpdatesTotalEpisodesHelp')}</p>
+															{editingMissionUpdateId !== null ? (
+																<div className="flex flex-wrap items-center gap-3 rounded-xl border border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 px-3 py-2 text-sm text-neutral-100">
+																	<span>{ta('gamesMissionUpdatesEditingState')}</span>
+																	<AdminButton variant="secondary" onClick={cancelMissionUpdateEditing} disabled={activeAction !== null}>
+																		{ta('gamesMissionUpdatesCancelEditAction')}
+																	</AdminButton>
+																</div>
+															) : null}
+
+															<div className="flex flex-wrap gap-3">
+																<AdminButton variant="secondary" onClick={() => void handleCreateMissionUpdate('squads_slotting_started')} disabled={activeAction !== null || mission.status !== 'published' || !missionUpdateEpisodeNumber.trim() || !missionUpdateTotalEpisodes.trim()}>
+																	{activeAction === 'mission-update' ? ta(editingMissionUpdateId !== null ? 'gamesMissionUpdatesSaving' : 'gamesMissionUpdatesPosting') : editingMissionUpdateId !== null ? ta('gamesMissionUpdatesSaveSquadsAction') : ta('gamesMissionUpdatesSquadsAction')}
+																</AdminButton>
+																<AdminButton variant="secondary" onClick={() => void handleCreateMissionUpdate('priority_slotting_started')} disabled={activeAction !== null || mission.status !== 'published' || !missionUpdateEpisodeNumber.trim() || !missionUpdateTotalEpisodes.trim()}>
+																	{activeAction === 'mission-update' ? ta(editingMissionUpdateId !== null ? 'gamesMissionUpdatesSaving' : 'gamesMissionUpdatesPosting') : editingMissionUpdateId !== null ? ta('gamesMissionUpdatesSavePriorityAction') : ta('gamesMissionUpdatesPriorityAction')}
+																</AdminButton>
+																<AdminButton variant="secondary" onClick={() => void handleCreateMissionUpdate('regular_slotting_started')} disabled={activeAction !== null || mission.status !== 'published' || !missionUpdateEpisodeNumber.trim() || !missionUpdateTotalEpisodes.trim()}>
+																	{activeAction === 'mission-update' ? ta(editingMissionUpdateId !== null ? 'gamesMissionUpdatesSaving' : 'gamesMissionUpdatesPosting') : editingMissionUpdateId !== null ? ta('gamesMissionUpdatesSaveRegularAction') : ta('gamesMissionUpdatesRegularAction')}
+																</AdminButton>
+																<AdminButton variant="secondary" onClick={() => void handleCreateMissionUpdate('game_started_wait_next_episode')} disabled={activeAction !== null || mission.status !== 'published' || !missionUpdateEpisodeNumber.trim() || !missionUpdateTotalEpisodes.trim()}>
+																	{activeAction === 'mission-update' ? ta(editingMissionUpdateId !== null ? 'gamesMissionUpdatesSaving' : 'gamesMissionUpdatesPosting') : editingMissionUpdateId !== null ? ta('gamesMissionUpdatesSaveGameStartedAction') : ta('gamesMissionUpdatesGameStartedAction')}
+																</AdminButton>
+															</div>
+
+															{mission.updates.length > 0 ? (
+																<div className="max-h-80 overflow-y-auto rounded-2xl border border-neutral-800 bg-neutral-950/60 p-3">
+																	<div className="grid gap-3">
+																		{mission.updates.map((update) => (
+																			<div key={update.id} className="rounded-xl border border-neutral-800 bg-black/20 px-4 py-3">
+																				<div className="flex items-start justify-between gap-3">
+																					<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">{formatLocalizedDateTime(update.createdAt, { locale, timeZone, hourCycle, dateStyle: 'medium', timeStyle: 'short' }) ?? update.createdAt}</p>
+																					<AdminButton variant="secondary" onClick={() => handleEditMissionUpdate(update)} disabled={activeAction !== null || mission.status !== 'published'}>
+																						{ta('gamesMissionUpdatesEditAction')}
+																					</AdminButton>
+																				</div>
+																				<p className="mt-2 text-sm leading-7 text-neutral-200">{formatMissionUpdateMessage(update, tg)}</p>
+																			</div>
+																		))}
+																	</div>
+																</div>
+															) : (
+																<p className="text-sm text-neutral-400">{ta('gamesMissionUpdatesEmpty')}</p>
+															)}
 														</div>
 													</ActionCard>
 

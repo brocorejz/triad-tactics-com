@@ -84,6 +84,8 @@ function insertPublishedMission(opts?: {
 	regularJoinEnabled?: boolean;
 	priorityGameplayReleasedAt?: string | null;
 	regularGameplayReleasedAt?: string | null;
+	priorityGameplayEverReleased?: boolean;
+	regularGameplayEverReleased?: boolean;
 	earlyPassword?: string | null;
 	finalPassword?: string | null;
 	slotting?: unknown;
@@ -108,13 +110,15 @@ function insertPublishedMission(opts?: {
 			regular_join_enabled,
 			priority_gameplay_released_at,
 			regular_gameplay_released_at,
+			priority_gameplay_ever_released,
+			regular_gameplay_ever_released,
 			slotting_json,
 			created_by_steamid64,
 			updated_by_steamid64,
 			published_at,
 			published_by_steamid64
 		)
-		VALUES (?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+		VALUES (?, 'published', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
 	`).run(
 		opts?.shortCode ?? 'OP-DETAIL',
 		opts?.title ?? 'Operation Detail',
@@ -130,6 +134,8 @@ function insertPublishedMission(opts?: {
 		opts?.regularJoinEnabled ? 1 : 0,
 		opts?.priorityGameplayReleasedAt ?? null,
 		opts?.regularGameplayReleasedAt ?? null,
+		typeof opts?.priorityGameplayEverReleased === 'boolean' ? (opts.priorityGameplayEverReleased ? 1 : 0) : (opts?.priorityGameplayReleasedAt ? 1 : 0),
+		typeof opts?.regularGameplayEverReleased === 'boolean' ? (opts.regularGameplayEverReleased ? 1 : 0) : (opts?.regularGameplayReleasedAt ? 1 : 0),
 		JSON.stringify(opts?.slotting ?? createMissionSlotting()),
 		ADMIN_STEAM_ID,
 		ADMIN_STEAM_ID,
@@ -341,7 +347,7 @@ describe('Game mission endpoint (integration)', () => {
 				priorityClaimOpen: true,
 				regularJoinOpen: true,
 				availablePrioritySlotCount: 1,
-				password: { stage: 'early', value: 'mods-pass' },
+				password: { stage: 'early', value: 'mods-pass', waitingForViewerAccess: false, missedJoinWindow: false },
 				regularJoiners: [
 					expect.objectContaining({ userId: joiner.userId, callsign: 'Walker' })
 				],
@@ -388,7 +394,7 @@ describe('Game mission endpoint (integration)', () => {
 		);
 		expect(priorityRes.status).toBe(200);
 		const priorityJson = await priorityRes.json();
-		expect(priorityJson.mission.password).toEqual({ stage: 'final', value: 'live-pass' });
+		expect(priorityJson.mission.password).toEqual({ stage: 'final', value: 'live-pass', waitingForViewerAccess: false, missedJoinWindow: false });
 		expect(priorityJson.mission.priorityClaimOpen).toBe(false);
 		expect(priorityJson.mission.regularJoinOpen).toBe(false);
 		expect(priorityJson.mission.viewer).toEqual(
@@ -408,7 +414,7 @@ describe('Game mission endpoint (integration)', () => {
 		);
 		expect(outsiderRes.status).toBe(200);
 		const outsiderJson = await outsiderRes.json();
-		expect(outsiderJson.mission.password).toEqual({ stage: 'early', value: 'mods-pass' });
+		expect(outsiderJson.mission.password).toEqual({ stage: null, value: null, waitingForViewerAccess: true, missedJoinWindow: false });
 	});
 
 	it('falls back to mod password when final password cannot be decrypted for an authorized viewer', async () => {
@@ -435,7 +441,7 @@ describe('Game mission endpoint (integration)', () => {
 		expect(res.status).toBe(200);
 		const json = await res.json();
 		expect(json.success).toBe(true);
-		expect(json.mission.password).toEqual({ stage: 'early', value: 'mods-pass' });
+		expect(json.mission.password).toEqual({ stage: 'early', value: 'mods-pass', waitingForViewerAccess: false, missedJoinWindow: false });
 	});
 
 	it('shows final password to regular-release snapshot users but not late joiners', async () => {
@@ -466,7 +472,7 @@ describe('Game mission endpoint (integration)', () => {
 		);
 		expect(snapshotRes.status).toBe(200);
 		const snapshotJson = await snapshotRes.json();
-		expect(snapshotJson.mission.password).toEqual({ stage: 'final', value: 'live-pass' });
+		expect(snapshotJson.mission.password).toEqual({ stage: 'final', value: 'live-pass', waitingForViewerAccess: false, missedJoinWindow: false });
 		expect(snapshotJson.mission.viewer).toEqual(
 			expect.objectContaining({
 				joinedRegular: true,
@@ -483,7 +489,38 @@ describe('Game mission endpoint (integration)', () => {
 		);
 		expect(lateJoinerRes.status).toBe(200);
 		const lateJoinerJson = await lateJoinerRes.json();
-		expect(lateJoinerJson.mission.password).toEqual({ stage: 'early', value: 'mods-pass' });
+		expect(lateJoinerJson.mission.password).toEqual({ stage: null, value: null, waitingForViewerAccess: false, missedJoinWindow: true });
+	});
+
+	it('keeps regular join closed and hides passwords after both gameplay stages were hidden', async () => {
+		const { dbOperations, GET, NextRequest } = await loadGameMissionHarness();
+		const viewer = createConfirmedPlayer(dbOperations, {
+			steamId64: '76561198000000108',
+			callsign: 'LateViewer'
+		});
+
+		insertPublishedMission({
+			shortCode: 'OP-HIDDEN-AFTER-RELEASE',
+			regularJoinEnabled: true,
+			priorityGameplayReleasedAt: null,
+			regularGameplayReleasedAt: null,
+			priorityGameplayEverReleased: true,
+			regularGameplayEverReleased: true
+		});
+
+		const res = await GET(
+			new NextRequest('http://localhost/api/games/OP-HIDDEN-AFTER-RELEASE', {
+				headers: { cookie: `tt_steam_session=${viewer.sessionId}` }
+			}),
+			gameRouteContext('OP-HIDDEN-AFTER-RELEASE')
+		);
+
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.mission.regularJoinOpen).toBe(false);
+		expect(json.mission.viewer.canJoinRegular).toBe(false);
+		expect(json.mission.password).toEqual({ stage: null, value: null, waitingForViewerAccess: false, missedJoinWindow: true });
 	});
 
 	it('rejects unconfirmed users from loading mission detail', async () => {
@@ -558,7 +595,7 @@ describe('Game mission endpoint (integration)', () => {
 				},
 				priorityClaimOpen: false,
 				regularJoinOpen: false,
-				password: { stage: null, value: null },
+				password: { stage: null, value: null, waitingForViewerAccess: false, missedJoinWindow: false },
 				viewer: expect.objectContaining({
 					steamId64: '76561198000000107',
 					canClaimPriority: false,
