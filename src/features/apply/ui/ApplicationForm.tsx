@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
 import { parseSubmitApplicationResponse } from '@/features/apply/domain/api';
 import { parseUserStatus, type UserStatus } from '@/features/users/domain/api';
-import { applicationSchema, type ApplicationFormData } from '../schema';
+import { applicationSchema, type ApplicationFormInput } from '../schema';
 import type { ZodIssue } from 'zod';
 import { SteamSignInButton } from '@/features/steamAuth/ui/root';
 import { CallsignField, CallsignSearch } from '@/features/callsign/ui/root';
@@ -23,10 +23,9 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
   const t = useTranslations('form');
   const params = useParams();
   const locale = (params?.locale as string | undefined) ?? 'en';
+  const guideHref = `/${locale}/guide`;
   const initialSteamConnected = props.initialSteamConnected === true;
-  const supportEmail = t('supportEmail');
-  const showSupportEmail = typeof supportEmail === 'string' && supportEmail.includes('@');
-  const [formData, setFormData] = useState<ApplicationFormData>({
+  const [formData, setFormData] = useState<ApplicationFormInput>({
     callsign: '',
     name: '',
     age: '',
@@ -36,7 +35,8 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
     availability: '',
     timezone: '',
     experience: '',
-    motivation: ''
+    motivation: '',
+    acceptRulesAndTerms: false
   });
 
   const [steamAuth, setSteamAuth] = useState<UserStatus | null>(null);
@@ -121,7 +121,7 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
     return t(`errors.${issue.message}`, params);
   };
 
-  const validateOne = (field: keyof ApplicationFormData, value: string): string | null => {
+  const validateOne = (field: keyof ApplicationFormInput, value: unknown): string | null => {
     const schema = fieldSchemas[field];
     if (!schema) return null;
     const result = schema.safeParse(value);
@@ -148,7 +148,7 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
   };
 
   const validateAll = (
-    data: ApplicationFormData
+    data: ApplicationFormInput
   ): { ok: true; errors: Record<string, string> } | { ok: false; errors: Record<string, string>; firstField: string | null } => {
     const validation = applicationSchema.safeParse(data);
     if (validation.success) {
@@ -174,22 +174,18 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
     return { ok: false, errors: newErrors, firstField };
   };
 
-  const handleChange = (field: keyof ApplicationFormData, value: string) => {
+  const handleChange = (field: keyof ApplicationFormInput, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
-
-  // Callsign availability checks are async; make syntax errors immediate to avoid confusing
-  // "couldn't check" messages for obviously invalid inputs like "[TT]".
   if (field === 'callsign') {
-    const trimmed = value.trim();
+    const trimmed = typeof value === 'string' ? value.trim() : '';
     const hasValue = trimmed.length > 0;
     const charsAllowed = /^[A-Za-z0-9_]*$/.test(trimmed);
 
     setErrors((prev) => {
       const next = { ...prev };
-      // Clear prior field errors by default.
       delete next[field];
 
       if (hasValue && !charsAllowed) {
@@ -207,7 +203,7 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
   });
   };
 
-  const handleBlur = (field: keyof ApplicationFormData) => {
+  const handleBlur = (field: keyof ApplicationFormInput) => {
     const value = formData[field];
     const error = validateOne(field, value);
 
@@ -364,19 +360,47 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
 
   return (
     <div className="w-full">
-      {showSupportEmail && (
-        <div className="mb-6 rounded-2xl border border-neutral-800 bg-neutral-950 p-4">
-          <p className="text-base leading-relaxed text-neutral-300">
-            {t('supportNote')}{' '}
-            <a
-              href={`mailto:${supportEmail}`}
-              className="font-medium text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-[color:var(--accent)]"
-            >
-              {supportEmail}
-            </a>
-          </p>
-        </div>
-      )}
+      <div className="mb-6 rounded-2xl border border-neutral-800 bg-neutral-950 p-4">
+        <p className="text-base leading-relaxed text-neutral-300">
+          {t.rich('guideDisclaimer', {
+            link: (chunks) => (
+              <a
+                href={guideHref}
+                className="font-medium text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-[color:var(--accent)]"
+              >
+                {chunks}
+              </a>
+            )
+          })}
+        </p>
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-neutral-800 bg-neutral-950 p-4">
+        <p className="text-base leading-relaxed text-neutral-300">
+          {t.rich('supportCommunity', {
+            discord: (chunks) => (
+              <a
+                href="https://discord.gg/t8TK9Y2vsM"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-[color:var(--accent)]"
+              >
+                {chunks}
+              </a>
+            ),
+            telegram: (chunks) => (
+              <a
+                href="https://t.me/triad_tactics"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-[color:var(--accent)]"
+              >
+                {chunks}
+              </a>
+            )
+          })}
+        </p>
+      </div>
 
       {popup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
@@ -736,6 +760,42 @@ export default function ApplicationForm(props: { initialSteamConnected?: boolean
           {errors.motivation && (
             <p className="mt-1 text-sm text-red-400">{errors.motivation}</p>
           )}
+        </div>
+
+        <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-3">
+          <label htmlFor="acceptRulesAndTerms" className="flex cursor-pointer items-start gap-3">
+            <input
+              id="acceptRulesAndTerms"
+              type="checkbox"
+              checked={formData.acceptRulesAndTerms}
+              onChange={(e) => handleChange('acceptRulesAndTerms', e.target.checked)}
+              onBlur={() => handleBlur('acceptRulesAndTerms')}
+              className="mt-1 h-4 w-4 rounded border-neutral-700 bg-neutral-950 text-[color:var(--accent)] focus:ring-[color:var(--accent)]"
+            />
+            <span className="text-sm leading-relaxed text-neutral-300">
+              {t.rich('consentLabel', {
+                rules: (chunks) => (
+                  <a
+                    href={`/${locale}/rules`}
+                    className="font-medium text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-[color:var(--accent)]"
+                  >
+                    {chunks}
+                  </a>
+                ),
+                terms: (chunks) => (
+                  <a
+                    href={`/${locale}/terms`}
+                    className="font-medium text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-[color:var(--accent)]"
+                  >
+                    {chunks}
+                  </a>
+                )
+              })}
+            </span>
+          </label>
+          {errors.acceptRulesAndTerms ? (
+            <p className="mt-2 text-sm text-red-400">{errors.acceptRulesAndTerms}</p>
+          ) : null}
         </div>
 
         <div className="pt-2">

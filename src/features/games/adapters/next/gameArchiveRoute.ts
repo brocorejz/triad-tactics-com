@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGameArchiveSummariesDeps } from '@/features/games/deps';
 import { getGameArchiveSummaries } from '@/features/games/useCases/getGameArchiveSummaries';
 import { errorToLogObject, logger } from '@/platform/logger';
-import { requireConfirmedGameUser } from './gameRouteHelpers';
+import { requireConnectedGameUser } from './gameRouteHelpers';
 
 export async function getGameArchiveRoute(request: NextRequest): Promise<NextResponse> {
 	try {
-		const member = requireConfirmedGameUser(request);
+		const member = requireConnectedGameUser(request);
 		if (!member.ok) return member.response;
 
 		const archive = getGameArchiveSummaries(getGameArchiveSummariesDeps);

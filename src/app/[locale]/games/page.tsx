@@ -6,8 +6,7 @@ import { getGameArchiveSummaries } from '@/features/games/useCases/getGameArchiv
 import { getCurrentGame } from '@/features/games/useCases/getCurrentGame';
 import { STEAM_SESSION_COOKIE } from '@/features/steamAuth/sessionCookie';
 import { steamAuthDeps } from '@/features/steamAuth/deps';
-import { getUserFlowRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
-import { isConfirmedByAccessLevel } from '@/features/users/domain/api';
+import { getProtectedPageRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
 import { getUserStatus } from '@/features/users/useCases/getUserStatus';
 
 export default async function GamesRoutePage({ params }: { params: Promise<{ locale: string }> }) {
@@ -16,12 +15,8 @@ export default async function GamesRoutePage({ params }: { params: Promise<{ loc
 	const sid = cookieStore.get(STEAM_SESSION_COOKIE)?.value ?? null;
 	const status = getUserStatus(steamAuthDeps, sid);
 
-	const flowRedirect = getUserFlowRedirect(locale, status);
+	const flowRedirect = getProtectedPageRedirect(locale, status);
 	if (flowRedirect) redirect(flowRedirect);
-
-	if (!status.connected || !isConfirmedByAccessLevel(status.accessLevel)) {
-		redirect(`/${locale}`);
-	}
 
 	const current = getCurrentGame(getCurrentGameDeps);
 	const archive = getGameArchiveSummaries(getGameArchiveSummariesDeps);

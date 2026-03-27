@@ -1,7 +1,10 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { buildTestApplicationRecord } from '../../../../fixtures/application';
 import { setupIsolatedDb } from '../../../../fixtures/isolatedDb';
 import { buildApplySubmitPayload } from '../../../../fixtures/applyPayload';
 import { createSteamSession } from '../../../../fixtures/steamSession';
+
+const ADMIN_STEAM_ID = '76561198012345678';
 
 function requireEnv(name: string): string {
 	const v = process.env[name];
@@ -43,6 +46,26 @@ async function postSubmitWithSteamSession(opts: {
 	return await POST(req);
 }
 
+function createConfirmedApplicant(
+	dbOperations: Awaited<ReturnType<typeof loadSubmitApiHarness>>['dbOperations'],
+	input: { steamid64: string; emailPrefix: string; callsign: string }
+) {
+	const inserted = dbOperations.insertApplication(
+		buildTestApplicationRecord({
+			email: `${input.emailPrefix}-${crypto.randomUUID()}@example.com`,
+			steamid64: input.steamid64,
+			callsign: input.callsign
+		})
+	);
+	expect(inserted.success).toBe(true);
+	if (!inserted.success) {
+		throw new Error('Expected application insert to succeed');
+	}
+
+	const confirmed = dbOperations.confirmApplication(Number(inserted.id), ADMIN_STEAM_ID);
+	expect(confirmed.success).toBe(true);
+}
+
 const hasSteamEnv = Boolean(
 	process.env.STEAM_WEB_API_KEY &&
 		process.env.TEST_STEAMID64_OWNED &&
@@ -53,6 +76,11 @@ const describeSteam = hasSteamEnv ? describe : describe.skip;
 describeSteam('Apply workflow: submit route (live Steam via API route)', () => {
 	beforeAll(async () => {
 		await setupIsolatedDb('triad-tactics-submit-steam-test');
+	});
+
+	beforeEach(async () => {
+		const { dbOperations } = await import('../../../../fixtures/dbOperations');
+		dbOperations.clearAll();
 	});
 
 	it('accepts a profile that owns Arma Reforger', async () => {
@@ -83,7 +111,7 @@ describeSteam('Apply workflow: submit route (live Steam via API route)', () => {
 		expect(json.error).toBe('steam_game_not_detected');
 	});
 
-	it('enforces uniqueness per user (second submit is duplicate)', async () => {
+	it('blocks a second submit for an unconfirmed applicant', async () => {
 		process.env.STEAM_WEB_API_KEY = requireEnv('STEAM_WEB_API_KEY');
 		const steamid64 = requireEnv('TEST_STEAMID64_OWNED');
 		const { dbOperations } = await import('../../../../fixtures/dbOperations');
@@ -101,9 +129,30 @@ describeSteam('Apply workflow: submit route (live Steam via API route)', () => {
 			body: buildApplySubmitPayload({ locale: 'en' }),
 			ip: '203.0.113.12'
 		});
-		expect(res2.status).toBe(409);
+		expect(res2.status).toBe(403);
 		const json2 = await res2.json();
-		expect(json2.error).toBe('duplicate');
+		expect(json2.error).toBe('forbidden');
+	});
+
+	it('returns duplicate for a confirmed applicant', async () => {
+		process.env.STEAM_WEB_API_KEY = requireEnv('STEAM_WEB_API_KEY');
+		const steamid64 = requireEnv('TEST_STEAMID64_OWNED');
+		const { dbOperations } = await import('../../../../fixtures/dbOperations');
+		dbOperations.deleteBySteamId64(steamid64);
+		createConfirmedApplicant(dbOperations, {
+			emailPrefix: 'submit-confirmed-duplicate',
+			steamid64,
+			callsign: 'Confirmed_Submitter'
+		});
+
+		const res = await postSubmitWithSteamSession({
+			steamid64,
+			body: buildApplySubmitPayload({ locale: 'en' }),
+			ip: '203.0.113.13'
+		});
+		expect(res.status).toBe(409);
+		const json = await res.json();
+		expect(json.error).toBe('duplicate');
 	});
 
 	it('normalizes unsupported locale to en', async () => {

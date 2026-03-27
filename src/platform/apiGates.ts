@@ -45,8 +45,6 @@ function isDiscordApiPath(pathname: string): boolean {
 
 function getExpectedOrigin(request: NextRequest): string {
 	const url = new URL(request.url);
-
-	// Prefer forwarded headers when behind a proxy.
 	const forwardedProto = request.headers.get('x-forwarded-proto');
 	const forwardedHost = request.headers.get('x-forwarded-host');
 	if (forwardedProto && forwardedHost) {
@@ -65,18 +63,13 @@ function getOriginFromHeaderValue(value: string): string | null {
 }
 
 function enforceSameOriginForAdminMutations(request: NextRequest): Response | null {
-	// Safety: never try to enforce in edge runtime.
 	if (isEdgeRuntime()) return null;
 
 	const pathname = request.nextUrl.pathname;
 	if (!isAdminApiPath(pathname)) return null;
-
-	// Only protect state-changing requests.
 	if (isSafeMethod(request.method)) return null;
 
 	const expectedOrigin = getExpectedOrigin(request);
-
-	// Browsers send Origin on fetch/XHR for POSTs; fall back to Referer for older flows.
 	const originHeader = request.headers.get('origin');
 	if (originHeader) return originHeader === expectedOrigin ? null : jsonError('csrf', 403);
 
@@ -90,59 +83,60 @@ function enforceSameOriginForAdminMutations(request: NextRequest): Response | nu
 }
 
 function isAllowedDuringRenameBlock(pathname: string): boolean {
-	// Allow Steam auth routes so the user can sign in/out.
 	if (isSteamAuthApiPath(pathname)) return true;
 	if (isDiscordApiPath(pathname)) return true;
 	if (pathname === USER_STATUS_API_PATH) return true;
-	// Allow submitting a rename request and checking callsign availability.
 	if (pathname === '/api/rename') return true;
 	if (isCallsignApiPath(pathname)) return true;
 	return false;
 }
 
 function isAllowedDuringApplyRequired(pathname: string): boolean {
-	// Allow Steam auth routes so the user can sign in/out.
 	if (isSteamAuthApiPath(pathname)) return true;
 	if (isDiscordApiPath(pathname)) return true;
 	if (pathname === USER_STATUS_API_PATH) return true;
-	// Allow application submission and callsign checks while filling the form.
 	if (pathname === '/api/submit') return true;
 	if (isCallsignApiPath(pathname)) return true;
 	return false;
 }
 
+function isAllowedDuringConfirmationPending(pathname: string): boolean {
+	if (isSteamAuthApiPath(pathname)) return true;
+	if (pathname === USER_STATUS_API_PATH) return true;
+	return false;
+}
+
 export async function enforceSteamGatesForApi(request: NextRequest): Promise<Response | null> {
-	// Safety: never try to run DB-backed gating in edge runtime.
 	if (isEdgeRuntime()) return null;
 
 	const pathname = request.nextUrl.pathname;
 	if (!isApiPath(pathname)) return null;
-
-	// Admin routes do their own allowlist/auth checks (and admins may not have applied).
 	if (isAdminApiPath(pathname)) return null;
 
 	try {
 		const { STEAM_SESSION_COOKIE } = await import('../features/steamAuth/sessionCookie');
 		const { steamAuthDeps } = await import('../features/steamAuth/deps');
+		const { isConfirmedByAccessLevel } = await import('../features/users/domain/api');
 		const { getUserStatus } = await import('../features/users/useCases/getUserStatus');
 
 		const sid = request.cookies.get(STEAM_SESSION_COOKIE)?.value ?? null;
 		const status = getUserStatus(steamAuthDeps, sid);
 		if (!status.connected) return isCallsignApiPath(pathname) ? jsonError('steam_required', 401) : null;
 
-		// Hard block: rename required until the user submits a rename request.
 		if (status.renameRequired && !status.hasPendingRenameRequest) {
 			return isAllowedDuringRenameBlock(pathname) ? null : jsonError('rename_required', 409);
 		}
 
-		// Steam users must apply before using the rest of the site.
 		if (!status.hasExisting) {
 			return isAllowedDuringApplyRequired(pathname) ? null : jsonError('application_required', 409);
 		}
 
+		if (!isConfirmedByAccessLevel(status.accessLevel)) {
+			return isAllowedDuringConfirmationPending(pathname) ? null : jsonError('forbidden', 403);
+		}
+
 		return null;
 	} catch {
-		// Fail open: if gating can't be evaluated, don't take the whole API down.
 		return null;
 	}
 }

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { AdminUsersPage } from '@/features/admin/ui/root';
 import { STEAM_SESSION_COOKIE } from '@/features/steamAuth/sessionCookie';
 import { steamAuthDeps } from '@/features/steamAuth/deps';
-import { getUserFlowRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
+import { getProtectedPageRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
 import { getUserStatus } from "@/features/users/useCases/getUserStatus";
 
 export default async function AdminUsersGatePage({ params }: { params: Promise<{ locale: string }> }) {
@@ -12,8 +12,10 @@ export default async function AdminUsersGatePage({ params }: { params: Promise<{
 	const sid = cookieStore.get(STEAM_SESSION_COOKIE)?.value ?? null;
 	const status = getUserStatus(steamAuthDeps, sid);
 
-	const flowRedirect = getUserFlowRedirect(locale, status);
+	const flowRedirect = getProtectedPageRedirect(locale, status);
 	if (flowRedirect) redirect(flowRedirect);
+	if (!status.connected) redirect(`/${locale}/apply`);
+	if (status.accessLevel !== 'admin') redirect(`/${locale}`);
 
 	return <AdminUsersPage />;
 }

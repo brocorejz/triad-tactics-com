@@ -2,12 +2,41 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { setupIsolatedDb } from '../../../../fixtures/isolatedDb';
 import { buildTestApplicationRecord } from '../../../../fixtures/application';
 import { createSteamSession } from '../../../../fixtures/steamSession';
+
+const ADMIN_STEAM_ID = '76561198012345678';
+
 async function loadRenameApiHarness() {
 	const { dbOperations } = await import('../../../../fixtures/dbOperations');
 	const { POST } = await import('@/app/api/rename/route');
 	const { NextRequest } = await import('next/server');
 	return { dbOperations, POST, NextRequest };
 }
+
+function createConfirmedPlayer(
+	dbOperations: Awaited<ReturnType<typeof loadRenameApiHarness>>['dbOperations'],
+	input: { steamid64: string; callsign: string; emailPrefix: string; redirectPath?: string }
+) {
+	const inserted = dbOperations.insertApplication(
+		buildTestApplicationRecord({
+			email: `${input.emailPrefix}-${crypto.randomUUID()}@example.com`,
+			steamid64: input.steamid64,
+			callsign: input.callsign
+		})
+	);
+	expect(inserted.success).toBe(true);
+	if (!inserted.success) {
+		throw new Error('Expected application insert to succeed');
+	}
+
+	const confirmed = dbOperations.confirmApplication(Number(inserted.id), ADMIN_STEAM_ID);
+	expect(confirmed.success).toBe(true);
+
+	return createSteamSession(dbOperations, {
+		steamid64: input.steamid64,
+		redirectPath: input.redirectPath ?? '/en'
+	});
+}
+
 describe('Rename workflow: POST /api/rename (integration)', () => {
 	beforeAll(async () => {
 		await setupIsolatedDb('triad-tactics-rename-route-test');
@@ -29,16 +58,11 @@ describe('Rename workflow: POST /api/rename (integration)', () => {
 	it('returns 400 for invalid payload', async () => {
 		const { dbOperations, POST, NextRequest } = await loadRenameApiHarness();
 		const steamid64 = '76561198000000001';
-		const sid = createSteamSession(dbOperations, { steamid64, redirectPath: '/en' });
-
-		// /api/rename is gated by apply-required; seed an application so the handler runs.
-		dbOperations.insertApplication(
-			buildTestApplicationRecord({
-				email: `rename-invalid-${crypto.randomUUID()}@example.com`,
-				steamid64,
-				callsign: 'Existing_User'
-			})
-		);
+		const sid = createConfirmedPlayer(dbOperations, {
+			emailPrefix: 'rename-invalid',
+			steamid64,
+			callsign: 'Existing_User'
+		});
 
 		const req = new NextRequest('http://localhost/api/rename', {
 			method: 'POST',
@@ -58,16 +82,11 @@ describe('Rename workflow: POST /api/rename (integration)', () => {
 	it('returns 400 when rename is not required', async () => {
 		const { dbOperations, POST, NextRequest } = await loadRenameApiHarness();
 		const steamid64 = '76561198000000002';
-		const sid = createSteamSession(dbOperations, { steamid64, redirectPath: '/en' });
-
-		// /api/rename is gated by apply-required; seed an application so the handler runs.
-		dbOperations.insertApplication(
-			buildTestApplicationRecord({
-				email: `rename-not-required-${crypto.randomUUID()}@example.com`,
-				steamid64,
-				callsign: 'Existing_User_2'
-			})
-		);
+		const sid = createConfirmedPlayer(dbOperations, {
+			emailPrefix: 'rename-not-required',
+			steamid64,
+			callsign: 'Existing_User_2'
+		});
 
 		const req = new NextRequest('http://localhost/api/rename', {
 			method: 'POST',
@@ -87,16 +106,11 @@ describe('Rename workflow: POST /api/rename (integration)', () => {
 	it('creates a request when rename is required', async () => {
 		const { dbOperations, POST, NextRequest } = await loadRenameApiHarness();
 		const steamid64 = '76561198000000003';
-		const sid = createSteamSession(dbOperations, { steamid64, redirectPath: '/en' });
-
-		// Seed an application so apply-required doesn't block /api/rename.
-		dbOperations.insertApplication(
-			buildTestApplicationRecord({
-				email: `rename-required-${crypto.randomUUID()}@example.com`,
-				steamid64,
-				callsign: 'Existing_User_3'
-			})
-		);
+		const sid = createConfirmedPlayer(dbOperations, {
+			emailPrefix: 'rename-required',
+			steamid64,
+			callsign: 'Existing_User_3'
+		});
 
 		// Make rename required for this user.
 		dbOperations.setUserRenameRequiredBySteamId64({
@@ -135,16 +149,11 @@ describe('Rename workflow: POST /api/rename (integration)', () => {
 		);
 
 		const steamid64 = '76561198000000005';
-		const sid = createSteamSession(dbOperations, { steamid64, redirectPath: '/en' });
-
-		// Seed an application so apply-required doesn't block /api/rename.
-		dbOperations.insertApplication(
-			buildTestApplicationRecord({
-				email: `rename-taken-${crypto.randomUUID()}@example.com`,
-				steamid64,
-				callsign: 'Existing_User_5'
-			})
-		);
+		const sid = createConfirmedPlayer(dbOperations, {
+			emailPrefix: 'rename-taken',
+			steamid64,
+			callsign: 'Existing_User_5'
+		});
 
 		dbOperations.setUserRenameRequiredBySteamId64({
 			steamid64,
@@ -170,20 +179,15 @@ describe('Rename workflow: POST /api/rename (integration)', () => {
 	it('returns ok already_pending when a pending request exists', async () => {
 		const { dbOperations, POST, NextRequest } = await loadRenameApiHarness();
 		const steamid64 = '76561198000000004';
-		const sid = createSteamSession(dbOperations, { steamid64, redirectPath: '/en' });
-
-		// Seed an application so apply-required doesn't block /api/rename.
-		dbOperations.insertApplication(
-			buildTestApplicationRecord({
-				email: `rename-pending-${crypto.randomUUID()}@example.com`,
-				steamid64,
-				callsign: 'Exist_U4'
-			})
-		);
+		const sid = createConfirmedPlayer(dbOperations, {
+			emailPrefix: 'rename-pending',
+			steamid64,
+			callsign: 'Exist_U4'
+		});
 
 		dbOperations.setUserRenameRequiredBySteamId64({
 			steamid64,
-			requestedBySteamId64: '76561198012345678',
+			requestedBySteamId64: ADMIN_STEAM_ID,
 			reason: 'Policy'
 		});
 

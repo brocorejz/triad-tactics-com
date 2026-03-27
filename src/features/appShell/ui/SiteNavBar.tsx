@@ -55,8 +55,9 @@ export default function SiteNavBar() {
 				label: t('games'),
 				badge: currentGame ? t('currentIndicator') : null
 			});
-			base.push({ href: '/feed', label: t('feed'), badge: null });
 		}
+		base.push({ href: '/important', label: t('important'), badge: null });
+		base.push({ href: '/rules', label: t('rules'), badge: null });
 		return base;
 	}, [currentGame, isAuthorized, t]);
 

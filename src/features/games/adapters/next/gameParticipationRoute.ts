@@ -7,7 +7,7 @@ import {
 	leaveRegularGameDeps,
 	switchPrioritySlotDeps
 } from '@/features/games/deps';
-import { readShortCode, requireConfirmedGameUser, type GameRouteContext } from './gameRouteHelpers';
+import { readShortCode, requireConnectedGameUser, type GameRouteContext } from './gameRouteHelpers';
 import { claimPrioritySlot } from '@/features/games/useCases/claimPrioritySlot';
 import { joinRegularGame } from '@/features/games/useCases/joinRegularGame';
 import { leavePrioritySlot } from '@/features/games/useCases/leavePrioritySlot';
@@ -26,7 +26,7 @@ export async function postGameClaimRoute(
 	context: GameRouteContext
 ): Promise<NextResponse> {
 	try {
-		const member = requireConfirmedGameUser(request);
+		const member = requireConnectedGameUser(request);
 		if (!member.ok) return member.response;
 
 		const shortCode = await readShortCode(context);
@@ -75,7 +75,7 @@ export async function postGameJoinRoute(
 	context: GameRouteContext
 ): Promise<NextResponse> {
 	try {
-		const member = requireConfirmedGameUser(request);
+		const member = requireConnectedGameUser(request);
 		if (!member.ok) return member.response;
 
 		const shortCode = await readShortCode(context);
@@ -108,7 +108,7 @@ export async function postGameSwitchSlotRoute(
 	context: GameRouteContext
 ): Promise<NextResponse> {
 	try {
-		const member = requireConfirmedGameUser(request);
+		const member = requireConnectedGameUser(request);
 		if (!member.ok) return member.response;
 
 		const shortCode = await readShortCode(context);
@@ -154,7 +154,7 @@ export async function postGameLeaveRoute(
 	context: GameRouteContext
 ): Promise<NextResponse> {
 	try {
-		const member = requireConfirmedGameUser(request);
+		const member = requireConnectedGameUser(request);
 		if (!member.ok) return member.response;
 
 		const shortCode = await readShortCode(context);
@@ -186,7 +186,7 @@ export async function postGameLeaveSlotRoute(
 	context: GameRouteContext
 ): Promise<NextResponse> {
 	try {
-		const member = requireConfirmedGameUser(request);
+		const member = requireConnectedGameUser(request);
 		if (!member.ok) return member.response;
 
 		const shortCode = await readShortCode(context);

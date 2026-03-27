@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { STEAM_SESSION_COOKIE } from '@/features/steamAuth/sessionCookie';
 import { steamAuthDeps } from '@/features/steamAuth/deps';
 import { RenamePage } from '@/features/rename/ui/root';
+import { getProtectedPageRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
 import { getUserStatus } from "@/features/users/useCases/getUserStatus";
 
 export default async function RenameRoutePage({ params }: { params: Promise<{ locale: string }> }) {
@@ -11,9 +12,9 @@ export default async function RenameRoutePage({ params }: { params: Promise<{ lo
 	const sid = cookieStore.get(STEAM_SESSION_COOKIE)?.value ?? null;
 	const status = getUserStatus(steamAuthDeps, sid);
 
-	if (!status.connected) {
-		redirect(`/${locale}`);
-	}
+	const flowRedirect = getProtectedPageRedirect(locale, status);
+	if (flowRedirect && flowRedirect !== `/${locale}/rename`) redirect(flowRedirect);
+	if (!status.connected) redirect(`/${locale}/apply`);
 
 	// If no rename is required, there's nothing to do here.
 	if (!status.renameRequired) {

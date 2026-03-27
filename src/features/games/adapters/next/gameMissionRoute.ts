@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGameByShortCodeDeps } from '@/features/games/deps';
 import { getGameByShortCode } from '@/features/games/useCases/getGameByShortCode';
 import { errorToLogObject, logger } from '@/platform/logger';
-import { readShortCode, requireConfirmedGameUser, type GameRouteContext } from './gameRouteHelpers';
+import { readShortCode, requireConnectedGameUser, type GameRouteContext } from './gameRouteHelpers';
 
 export async function getGameMissionRoute(
 	request: NextRequest,
 	context: GameRouteContext
 ): Promise<NextResponse> {
 	try {
-		const member = requireConfirmedGameUser(request);
+		const member = requireConnectedGameUser(request);
 		if (!member.ok) return member.response;
 
 		const shortCode = await readShortCode(context);

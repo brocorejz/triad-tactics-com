@@ -30,9 +30,11 @@ export const dbOperations = {
 				'DELETE FROM missions; ' +
 				'DELETE FROM email_outbox; ' +
 				'DELETE FROM rename_requests; ' +
+				'DELETE FROM rename_requirements; ' +
+				'UPDATE users SET confirmed_application_id = NULL; ' +
 				'DELETE FROM user_identities; ' +
-				'DELETE FROM applications; ' +
 				'DELETE FROM steam_sessions; ' +
+				'DELETE FROM applications; ' +
 				'DELETE FROM users;'
 			);
 			return { success: true } as const;

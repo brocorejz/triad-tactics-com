@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { DISCORD_CLIENT_ID, DISCORD_REDIRECT_URI, DISCORD_REDIRECT_URI_LOCAL } from '@/platform/env';
 import { withApiGuards } from '@/platform/apiGates';
 import { DISCORD_OAUTH_STATE_COOKIE, DISCORD_OAUTH_STATE_MAX_AGE_SECONDS } from '../oauthStateCookie';
@@ -8,7 +8,7 @@ function getDiscordRedirectUri(): string | null {
 	return isDev ? (DISCORD_REDIRECT_URI_LOCAL ?? null) : (DISCORD_REDIRECT_URI ?? null);
 }
 
-async function getDiscordStartRoute(): Promise<NextResponse> {
+async function getDiscordStartRoute(_request: NextRequest): Promise<NextResponse> {
 	const redirectUri = getDiscordRedirectUri();
 	if (!DISCORD_CLIENT_ID || !redirectUri) {
 		return NextResponse.json({ error: 'server_error' }, { status: 500 });

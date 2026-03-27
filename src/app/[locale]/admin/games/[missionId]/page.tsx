@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import AdminGameMissionPage from '@/features/games/ui/AdminGameMissionPage';
 import { steamAuthDeps } from '@/features/steamAuth/deps';
 import { STEAM_SESSION_COOKIE } from '@/features/steamAuth/sessionCookie';
-import { getUserFlowRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
+import { getProtectedPageRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
 import { getUserStatus } from '@/features/users/useCases/getUserStatus';
 
 export default async function AdminGameMissionGatePage({ params }: { params: Promise<{ locale: string }> }) {
@@ -12,8 +12,10 @@ export default async function AdminGameMissionGatePage({ params }: { params: Pro
 	const sid = cookieStore.get(STEAM_SESSION_COOKIE)?.value ?? null;
 	const status = getUserStatus(steamAuthDeps, sid);
 
-	const flowRedirect = getUserFlowRedirect(locale, status);
+	const flowRedirect = getProtectedPageRedirect(locale, status);
 	if (flowRedirect) redirect(flowRedirect);
+	if (!status.connected) redirect(`/${locale}/apply`);
+	if (status.accessLevel !== 'admin') redirect(`/${locale}`);
 
 	return <AdminGameMissionPage />;
 }

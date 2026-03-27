@@ -5,8 +5,7 @@ import { getGameByShortCodeDeps } from '@/features/games/deps';
 import { getGameByShortCode } from '@/features/games/useCases/getGameByShortCode';
 import { STEAM_SESSION_COOKIE } from '@/features/steamAuth/sessionCookie';
 import { steamAuthDeps } from '@/features/steamAuth/deps';
-import { getUserFlowRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
-import { isConfirmedByAccessLevel } from '@/features/users/domain/api';
+import { getProtectedPageRedirect } from '@/features/steamAuth/useCases/userFlowRedirect';
 import { getUserStatus } from '@/features/users/useCases/getUserStatus';
 
 export default async function GameMissionRoutePage({
@@ -19,12 +18,9 @@ export default async function GameMissionRoutePage({
 	const sid = cookieStore.get(STEAM_SESSION_COOKIE)?.value ?? null;
 	const status = getUserStatus(steamAuthDeps, sid);
 
-	const flowRedirect = getUserFlowRedirect(locale, status);
+	const flowRedirect = getProtectedPageRedirect(locale, status);
 	if (flowRedirect) redirect(flowRedirect);
-
-	if (!status.connected || !isConfirmedByAccessLevel(status.accessLevel)) {
-		redirect(`/${locale}`);
-	}
+	if (!status.connected) redirect(`/${locale}/apply`);
 
 	const trimmedShortCode = shortCode.trim();
 	if (!trimmedShortCode) {

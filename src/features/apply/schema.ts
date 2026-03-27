@@ -18,7 +18,9 @@ export const applicationSchema = z.object({
   availability: z.string().trim().min(5, 'minLength').max(200, 'maxLength'),
   timezone: z.string().trim().min(1, 'required').max(20, 'maxLength'),
   experience: z.string().trim().min(10, 'minLength').max(2000, 'maxLength'),
-  motivation: z.string().trim().min(10, 'minLength').max(2000, 'maxLength')
+  motivation: z.string().trim().min(10, 'minLength').max(2000, 'maxLength'),
+  acceptRulesAndTerms: z.boolean().optional().refine(v => v === true, { message: 'consentRequired' })
 });
 
-export type ApplicationFormData = z.infer<typeof applicationSchema>;
+export type ApplicationFormInput = z.input<typeof applicationSchema>;
+export type ApplicationFormData = z.output<typeof applicationSchema>;
