@@ -139,11 +139,15 @@
 1.2.1.1. Follow the established slotting order.
 1.2.1.2. Respect the established priorities: squad slots, priority slots, regular slots.
 1.2.1.3. Follow the administrator's instructions during slotting.
+1.2.1.4. During the squad and priority slotting phase, take only a slot allocated to your squad or a pre-assigned priority slot.
+1.2.1.5. Take a free slot of another squad only after agreement with that squad's leader.
+1.2.1.6. Take regular slots only after solo players are admitted and free slotting on equal terms has been announced.
 1.2.2. A player is prohibited from:
 1.2.2.1. Taking slots assigned to other participants or squads, except in cases where the slot has been transferred to that player by its original holder.
 1.2.2.2. Ignoring administrative instructions.
 1.2.2.3. Changing slots after the beginning of the briefing or preparation phase.
 1.2.2.4. Kicking another player from a slot. This functionality is not used on our server.
+1.2.2.5. Taking regular slots before solo players are admitted and free slotting has been announced.
 1.2.3. Information about which slots are assigned to whom is available in the slotting section on the main page and on the mission page if the mission is published.
 
 ---
@@ -210,6 +214,9 @@
 3.4.4. An exception to clause 3.4.3 is a direct authorization from the side commander or the administration.
 3.4.5. Ramming with armored vehicles and aircraft is prohibited.
 3.4.6. An exception under clause 3.4.5 is allowed only in cases where the armored vehicle performing the ram, according to its real technical characteristics, weighs at least twice as much as the vehicle being rammed.
+3.4.7. Issues related to flipping vehicles must be resolved by players themselves within game mechanics and their side's capabilities.
+3.4.8. The administration is not required to intervene in gameplay actions related to flipping vehicles.
+3.4.9. Killing unoccupied bots for the purpose of taking their weapons, gear, or other resources is prohibited.
 
 ### 3.5 Friendly Fire
 
@@ -243,6 +250,13 @@
 3.8.1.2. Harm your own side.
 3.8.1.3. Display destructive behavior.
 
+### 3.9 Death, Bugs, and Stuck Situations
+
+3.9.1. In cases of death through negligence or due to game bugs, player respawn is not provided.
+3.9.2. Reason for clause 3.9.1: spectator mode may give a player prohibited information about enemy positions.
+3.9.3. If a player gets stuck in textures, the player must contact an administrator for extraction.
+3.9.4. An attempt to get out of textures independently that results in death is handled under clause 3.9.1.
+
 ---
 
 ## 4. Markers
@@ -259,3 +273,11 @@
 5.1. Penalties are assigned by the administration.
 5.2. Review of violations is conducted after the game.
 5.3. The priority when reviewing violations is to avoid disrupting the session.
+
+---
+
+## 6. Rules for Streamers
+
+6.1. Streamers are prohibited from broadcasting the map during the briefing stage.
+6.2. Streamers are prohibited from broadcasting the briefing itself.
+6.3. Streamers are prohibited from broadcasting any server connection details, including IP address, port, and password.
