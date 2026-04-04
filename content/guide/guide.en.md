@@ -30,11 +30,11 @@ Missions are published on the [Games](/en/games) page. Only one mission is avail
 
 ## How missions work
 
-Missions are pre-designed scenarios created by the administrators. They are connected by a shared theme, structure, and sequence
+A mission is a pre-prepared set of episodes created by the administrators. They are connected by a shared theme, structure, and sequence
 
-A single event usually includes several missions that take place one after another within a single session
+A mission usually consists of several episodes, which take place one after another
 
-The event itself lasts around 4 hours, while each mission typically takes between 1 and 1.5 hours
+The duration of a mission is approximately 4 hours, while a single episode lasts on average from 1 to 1.5 hours
 
 ## Player categories
 
