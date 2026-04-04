@@ -2,10 +2,6 @@
 
 This guide will walk you through the process of joining the Triad Tactics project — from submitting your application to playing your first mission
 
-## What is Triad Tactics
-
-Triad Tactics is an Arma Reforger project focused on immersive, teamwork-driven military operations. We create carefully prepared scenarios with authentic loadouts, vehicles, and environments. The server is maintained by the Triad Team, and we welcome players from all over the world
-
 ## Step 1. Sign in and apply
 
 To get started, you need to own Arma Reforger on Steam. Visit the Triad Tactics website and sign in with your Steam account. After signing in, you will be directed to the [application form](/en/apply)
@@ -34,7 +30,11 @@ Missions are published on the [Games](/en/games) page. Only one mission is avail
 
 ## How missions work
 
-Each mission is a structured scenario prepared by admins. Missions often consist of multiple episodes — sequential rounds that are played one after another in a single session. When one episode ends, the next one begins
+Missions are pre-designed scenarios created by the administrators. They are connected by a shared theme, structure, and sequence
+
+A single event usually includes several missions that take place one after another within a single session
+
+The event itself lasts around 4 hours, while each mission typically takes between 1 and 1.5 hours
 
 ## Player categories
 
