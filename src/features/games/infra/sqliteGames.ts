@@ -567,7 +567,18 @@ function resolveMissionPasswordForViewer(input: {
 	const priorityGameplayEverReleased = !!input.row.priority_gameplay_ever_released;
 	const regularGameplayEverReleased = !!input.row.regular_gameplay_ever_released;
 	const missedJoinWindow =
-		((input.row.regular_gameplay_released_at !== null || regularGameplayEverReleased) && !hasFinalGameplayAccess && !heldSlot) ||
+		(
+			input.row.regular_gameplay_released_at !== null &&
+			!hasFinalGameplayAccess &&
+			!heldSlot
+		) ||
+		(
+			input.row.regular_gameplay_released_at === null &&
+			regularGameplayEverReleased &&
+			!hasFinalGameplayAccess &&
+			!heldSlot &&
+			!input.joinedRegular
+		) ||
 		(
 			missionStarted &&
 			!hasFinalGameplayAccess &&

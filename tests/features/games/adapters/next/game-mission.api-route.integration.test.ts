@@ -523,6 +523,38 @@ describe('Game mission endpoint (integration)', () => {
 		expect(json.mission.password).toEqual({ stage: null, value: null, waitingForViewerAccess: false, missedJoinWindow: true });
 	});
 
+	it('does not mark joined regular participants as missed after both gameplay stages were hidden', async () => {
+		const { dbOperations, GET, NextRequest } = await loadGameMissionHarness();
+		const viewer = createConfirmedPlayer(dbOperations, {
+			steamId64: '76561198000000109',
+			callsign: 'EpisodeRegular'
+		});
+
+		const missionId = insertPublishedMission({
+			shortCode: 'OP-HIDDEN-AFTER-RELEASE-JOINED',
+			regularJoinEnabled: true,
+			priorityGameplayReleasedAt: null,
+			regularGameplayReleasedAt: null,
+			priorityGameplayEverReleased: true,
+			regularGameplayEverReleased: true
+		});
+		insertRegularJoin(missionId, viewer.userId, '76561198000000109');
+
+		const res = await GET(
+			new NextRequest('http://localhost/api/games/OP-HIDDEN-AFTER-RELEASE-JOINED', {
+				headers: { cookie: `tt_steam_session=${viewer.sessionId}` }
+			}),
+			gameRouteContext('OP-HIDDEN-AFTER-RELEASE-JOINED')
+		);
+
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.mission.regularJoinOpen).toBe(false);
+		expect(json.mission.viewer.joinedRegular).toBe(true);
+		expect(json.mission.password).toEqual({ stage: null, value: null, waitingForViewerAccess: false, missedJoinWindow: false });
+	});
+
 	it('rejects unconfirmed users from loading mission detail', async () => {
 		const { dbOperations, GET, NextRequest } = await loadGameMissionHarness();
 		insertPublishedMission({ shortCode: 'OP-GATED' });

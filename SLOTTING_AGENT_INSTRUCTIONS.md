@@ -3,160 +3,156 @@
 ## Goal
 Generate or update a mission slotting JSON by assigning **project squads** into an existing **in-game slot layout**.
 
-This document is for cases where:
-- mission slotting JSON can differ between missions,
-- project squads and counts can differ between events,
-- in-game squads (like `1-1`, `1-2`, `2-3`) must stay intact.
+This workflow is iterative: user may add, move, or rebalance squads/access after initial assignment. Apply requested changes with minimal collateral edits.
 
 ## Terms
-- `in-game squad`: Squad node already present in slotting JSON (`1-1`, `1-2`, etc.).
-- `project squad`: External group to place into slots (for example `TT`, `ALFA`, `REV`).
-- `assigned slot`: Slot occupied by a project squad placeholder.
-- `free slot`: Slot not occupied by project squad placeholder.
+- `in-game squad`: Existing squad node in mission JSON (`AR2`, `A23`, etc.).
+- `project squad`: External group (`TT`, `ALFA`, `REV`, etc.) placed into mission slots.
+- `assigned slot`: Slot occupied by project placeholder.
+- `free slot`: Slot not occupied by project placeholder.
+
+## Rule Priority (When Rules Conflict)
+1. Explicit current user request (forced side, forced in-game squad, commander mapping, exact role pattern).
+2. Hard Rules in this file.
+3. Keep current assignment state (iterative delta updates).
+4. Default strategy (proportional balancing/front-load).
 
 ## Hard Rules (Do Not Break)
 1. Keep mission structure unchanged:
-- Do not rename or delete sides.
-- Do not rename or delete in-game squads.
-- Do not add/remove/reorder slots.
-- Do not change slot IDs or roles.
+- do not rename/delete sides,
+- do not rename/delete in-game squads,
+- do not add/remove/reorder slots,
+- do not change slot IDs or role names.
 
-2. Assigned project-squad slots must use:
+2. Every project-squad-assigned slot must be:
 - `"access": "squad"`
 - `"occupant": { "type": "placeholder", "label": "<PROJECT_SQUAD>" }`
 
-3. Never mark project-squad-assigned slots as `priority` or `regular`.
+3. Never mark assigned project squad slots as `priority` or `regular`.
 
 4. For unassigned slots:
-- Keep original access if valid (`priority` or `regular`),
-- Keep or restore `occupant: null` unless explicitly told to preserve existing placeholder/user occupants.
+- use valid non-squad access (`priority` or `regular`),
+- keep `occupant: null` unless user explicitly asks to preserve existing occupants.
 
-5. Do not add text decorations to squad labels unless explicitly requested:
-- Use `"TT"`, not `"TT (Tester)"`.
+5. Keep squad labels plain (no decoration):
+- use `"TT"`, not `"TT (Tester)"`.
 
-## Placement Strategy
-### A) Side balancing (proportional)
-When user does not force side-specific counts, distribute assigned slots proportionally to side capacities.
+6. Every project squad must have an in-game squad anchor:
+- each project squad must occupy at least one concrete in-game squad block,
+- avoid scattered single-slot placement before establishing at least one anchor block.
 
-Formula:
+7. Iterative updates are delta-first:
+- if user asks one change, preserve unrelated assignments,
+- rebuild from scratch only if explicitly requested.
+
+8. Explicit directives are mandatory:
+- forced side/squad/role pattern/commander rules must be applied exactly.
+
+## Assignment Rules
+### A) Side balancing for project squads
+If user did not force side counts, distribute proportionally:
 - `target(side) = round(totalRequestedSlots * sideCapacity / totalCapacity)`
-- Adjust by largest remainder so sum of targets equals `totalRequestedSlots` exactly.
+- fix rounding via largest remainder so total matches requested slots exactly.
 
-Example:
-- USK capacity = 49, KPA capacity = 77, total = 126
-- requested = 82
-- USK target ~= 82 * 49/126 = 31.9 -> 32
-- KPA target = 50
-
-### B) Front-load assignment
-Within each side, fill from earliest in-game squads first:
-1. earlier squad order (`1-1`, `1-2`, `1-3`, ...)
-2. earlier slot index first
-
-This preserves the rule: regular/priority gameplay space naturally remains in later squads where possible.
+### B) Front-load inside each side
+Fill earlier in-game squads and earlier slot indices first, unless user overrides.
 
 ### C) Keep project squads together
-Try to keep each project squad contiguous and unsplit.
+Keep each project squad contiguous and unsplit when possible.
 
-Split only if needed due to capacity constraints.
 If split is required:
-1. prefer split across at most 2 neighboring in-game squads,
+1. prefer at most 2 neighboring in-game squads,
 2. keep split on same side before crossing sides,
-3. minimize number of fragments.
+3. minimize fragment count.
 
-### D) Squad leader placement on split
-When a project squad is split across two or more in-game squads, the "Squad Leader" role slot for that project squad must be placed in the in-game squad where the project squad occupies the majority of slots.
+### D) Squad Leader on split
+If a project squad is split, place its `Squad Leader` in the fragment with majority slots.
 
-Example:
-- `TT` has 12 slots, split as 9 in `1-2` and 3 in `1-3`.
-- The Squad Leader slot for `TT` must be in `1-2` (9 > 3).
+If tie, use earlier in-game squad.
 
-If the split is exactly equal, place the Squad Leader in the earlier in-game squad.
+### E) Role quality for undersized squads
+If project squad size is smaller than in-game squad capacity:
+1. allocate stronger roles first (`Squad Leader`, senior role, MG, assistant, SMG),
+2. leave lower-value rifleman roles for overflow,
+3. avoid giving high-value roles to non-squad players when project squad still needs slots.
 
-## Assignment Procedure
+### F) Commander and exact-pattern overrides
+Support mission-specific forced rules such as:
+1. commander mapping (`US commander = PP`, `KPA commander = RC`),
+2. exact slot patterns (example: full HQ + specific top slots + SMG),
+3. forced side assignment (`TT` must be on US side).
+
+## Non-Squad Access Rules (`priority` / `regular`)
+Apply only after all project squads are assigned.
+
+1. Default global split: `priority:regular = 2:1`, unless user requests otherwise.
+
+2. If user asks equal separation between sides:
+1. first try equal absolute counts by side,
+2. if impossible because free-slot capacities differ by side, keep equal proportion by side and explicitly report feasibility note.
+
+3. If user asks to boost priority in a specific in-game squad (example `A33`):
+1. allocate priority there first,
+2. rebalance remaining priority elsewhere to preserve global/side policy.
+
+4. Mixed non-squad squads rule:
+If an in-game squad contains both `priority` and `regular` (and is not project-assigned), priority should take `Squad Leader` slot first.
+
+## Procedure
 1. Parse canonical slotting JSON.
-2. Build side capacity map and in-game traversal order.
-3. Compute per-side slot targets.
-4. Reset only assignment-related fields (safe mode):
-- clear old placeholder occupants,
-- set previously project-assigned slots back to original non-squad access if known; otherwise default to `regular`.
-5. Place project squads in descending count order (largest first), respecting side targets and front-load rules.
-6. For each assigned slot:
-- set `access` to `squad`,
-- set placeholder occupant label to project squad name.
-7. Leave remaining slots unassigned for regular/priority flow.
-8. Validate (must pass all checks below).
+2. Build side capacities and traversal order.
+3. Read explicit user directives and lock them.
+4. Apply forced assignments first.
+5. Place remaining project squads by rules above.
+6. Apply non-squad access policy (`priority`/`regular`).
+7. Validate.
 
 ## Validation Checklist (Must Pass)
 1. Structure unchanged:
-- same sides, same in-game squads, same slot IDs and roles.
+- same sides, same in-game squads, same slot IDs/roles.
 
 2. Count correctness:
-- each project squad assigned exactly requested number of slots.
+- each project squad has exactly requested slot count.
 
 3. Access correctness:
-- all assigned placeholders have `access === "squad"`.
-- no assigned placeholder has `priority` or `regular`.
+- all project placeholders use `access: "squad"`,
+- no project-assigned slot is `priority`/`regular`.
 
-4. Side target correctness:
-- per-side assigned totals match proportional targets (unless user overrides).
+4. Placement correctness:
+- front-load respected unless overridden,
+- split rules respected,
+- Squad Leader placement on splits respected.
 
-5. Front-load correctness per side:
-- no assigned slot appears after an unassigned gap in side traversal order.
+5. Explicit directive correctness:
+- forced side/squad mappings satisfied,
+- commander mappings satisfied,
+- exact role-pattern constraints satisfied.
 
-## Generic Example
-### Input project squads
-- `TT: 12`
-- `ALFA: 12`
-- `KABAN: 8`
-- `REV: 8`
-
-### Input in-game layout excerpt
-```json
-{
-  "name": "USK",
-  "squads": [
-    { "name": "1-1", "slots": ["...2 slots..."] },
-    { "name": "1-2", "slots": ["...9 slots..."] },
-    { "name": "1-3", "slots": ["...9 slots..."] }
-  ]
-}
-```
-
-### Output pattern excerpt
-```json
-{
-  "name": "1-2",
-  "slots": [
-    {
-      "id": "side-1-squad-2-slot-1-squad-leader",
-      "role": "Squad Leader",
-      "access": "squad",
-      "occupant": { "type": "placeholder", "label": "TT" }
-    }
-  ]
-}
-```
-
-And if `TT` still needs extra slots after `1-2`, continue into earliest next slot(s), for example `1-3` slot 1.
+6. Non-squad access correctness:
+- requested `priority`/`regular` policy satisfied,
+- mixed non-squad squads give SL to `priority`,
+- feasibility note provided if exact side equality was impossible.
 
 ## Edge Cases
 1. Requested total exceeds free capacity:
-- fail with explicit message and required/available numbers.
+- fail with clear required/available numbers.
 
-2. Mission already has user occupants:
-- do not overwrite `occupant.type === "user"` unless explicitly instructed.
+2. Existing `occupant.type === "user"`:
+- do not overwrite unless explicitly instructed.
 
-3. Side override by user:
-- if user gives exact per-side counts, use those over proportional formula.
-
-4. Pre-existing placeholder occupants:
+3. Existing placeholders:
 - clear and rebuild assignment unless user asks to preserve.
 
-## Recommended Output Format For Reviews
-After generating JSON, provide:
-1. project squad -> assigned count
-2. side -> assigned count
-3. list of squads that were split (if any)
-4. confirmation that all assigned slots are `access: "squad"`
-5. confirmation that in-game structure was preserved
+4. Late squad additions (`add RT7`, `add TEST`, etc.):
+- add with minimal disruption and revalidate all counts/access policies.
+
+## Review Output (Required)
+After generation/update, always provide:
+1. project squad -> assigned count,
+2. side -> assigned count,
+3. split squads list,
+4. confirmation all project-assigned slots are `access: "squad"`,
+5. confirmation in-game structure is preserved,
+6. explicit overrides satisfied summary,
+7. `priority`/`regular` totals (global and by side),
+8. feasibility note if strict side equality was not possible.
