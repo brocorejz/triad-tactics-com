@@ -7,6 +7,7 @@ import {
 	deleteArchivedMissionRequestSchema,
 	importGameSlottingRequestSchema,
 	publishGameRequestSchema,
+	shortCodeSchema,
 	updateMissionUpdateRequestSchema,
 	updateGameSettingsRequestSchema,
 	updateGameSlottingRequestSchema
@@ -43,8 +44,10 @@ import { releaseRegularGameplay } from '@/features/games/useCases/releaseRegular
 import { updateMissionUpdate } from '@/features/games/useCases/updateMissionUpdate';
 import { updateGameSettings } from '@/features/games/useCases/updateGameSettings';
 import { updateGameSlotting } from '@/features/games/useCases/updateGameSlotting';
+import { DISCORD_BOT_TOKEN } from '@/platform/env';
 import { errorToLogObject, logger } from '@/platform/logger';
 import type { ZodIssue } from 'zod';
+import {notifyMissionUpdateInDiscord} from "@/features/games/useCases/notifyMissionUpdateInDiscord";
 
 type AdminGameMissionRouteContext = {
 	params: Promise<{ missionId: string }>;
@@ -165,6 +168,14 @@ function mapDeleteArchivedMissionError(result: { error: string }): NextResponse 
 
 	const status = result.error === 'database_error' ? 500 : 409;
 	return NextResponse.json({ error: result.error }, { status });
+}
+
+function readCanonicalMissionShortCode(missionId: number): string | null {
+	const mission = getAdminGameMission(getAdminGameMissionDeps, { missionId });
+	if (!mission.ok) return null;
+	const parsed = shortCodeSchema.safeParse(mission.mission.shortCode);
+	if (!parsed.success) return null;
+	return parsed.data;
 }
 
 export async function getAdminGameMissionRoute(
@@ -536,6 +547,11 @@ export async function postAdminGameMissionUpdateRoute(
 			return NextResponse.json({ error: created.error }, { status });
 		}
 
+		const shortCode = readCanonicalMissionShortCode(missionId);
+		notifyMissionUpdateInDiscord({ ...parsed.data, shortCode }, DISCORD_BOT_TOKEN).catch((error) => {
+			logger.error({ ...errorToLogObject(error) }, 'discord_mission_update_notification_failed');
+		});
+
 		return NextResponse.json({ success: true, mission: created.mission });
 	} catch (error: unknown) {
 		logger.error({ ...errorToLogObject(error) }, 'admin_game_update_create_failed');
@@ -583,6 +599,11 @@ export async function putAdminGameMissionUpdateRoute(
 			const status = updated.error === 'database_error' ? 500 : 409;
 			return NextResponse.json({ error: updated.error }, { status });
 		}
+
+		const shortCode = readCanonicalMissionShortCode(ids.missionId);
+		notifyMissionUpdateInDiscord({ ...parsed.data, shortCode }, DISCORD_BOT_TOKEN).catch((error) => {
+			logger.error({ ...errorToLogObject(error) }, 'discord_mission_update_notification_failed');
+		});
 
 		return NextResponse.json({ success: true, mission: updated.mission });
 	} catch (error: unknown) {
