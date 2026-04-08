@@ -1,18 +1,29 @@
 "use client";
 
+import { useLocale } from 'next-intl';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
+import { formatLocalizedFixedTime, type ViewerHourCycle } from '@/platform/dateTime';
+import { useViewerDateTimePreferences } from '@/platform/useViewerDateTimePreferences';
 
 type ImportantBlock =
 	| { kind: 'title'; text: string }
 	| { kind: 'heading'; text: string }
 	| { kind: 'paragraph'; text: string }
 	| { kind: 'list'; items: string[] }
-	| { kind: 'image'; src: string; alt: string };
+	| { kind: 'orderedList'; items: string[] }
+	| { kind: 'image'; src: string; alt: string }
+	| { kind: 'faq'; question: string; answer: ImportantBlock[] };
 
-function renderInline(text: string): ReactNode[] {
+type InlineRenderOptions = {
+	locale: string;
+	timeZone: string | null;
+	hourCycle: ViewerHourCycle | null;
+};
+
+function renderInline(text: string, options?: InlineRenderOptions): ReactNode[] {
 	return text
-		.split(/(`[^`]+`|\[[^\]]+\]\([^\)]+\)|https?:\/\/\S+)/g)
+		.split(/(`[^`]+`|\[[^\]]+\]\([^\)]+\)|https?:\/\/\S+|\b\d{1,2}:\d{2}(?:\s+[^\s`\[\]\(\)]+){0,2}\s+(?:CET|CEST)\b)/g)
 		.filter(Boolean)
 		.map((part, index) => {
 			if (part.startsWith('`') && part.endsWith('`')) {
@@ -54,6 +65,25 @@ function renderInline(text: string): ReactNode[] {
 				);
 			}
 
+			const localizedTimeMatch = part.match(/^(\d{1,2}:\d{2})(?:\s+[^\s`\[\]\(\)]+){0,2}\s+(CET|CEST)$/);
+			if (localizedTimeMatch) {
+				const [, timeValue, sourceZone] = localizedTimeMatch;
+				const localizedTime = options
+					? formatLocalizedFixedTime(timeValue, {
+							locale: options.locale,
+							timeZone: options.timeZone,
+							hourCycle: options.hourCycle,
+							sourceOffsetMinutes: sourceZone === 'CEST' ? 120 : 60
+						})
+					: null;
+
+				return (
+					<time key={`${part}-${index}`} dateTime={timeValue} className="font-medium text-neutral-100">
+						{localizedTime ?? timeValue}
+					</time>
+				);
+			}
+
 			return <span key={`${part}-${index}`}>{part}</span>;
 		});
 }
@@ -79,7 +109,26 @@ function parseMarkdown(content: string): ImportantBlock[] {
 		}
 
 		if (line.startsWith('## ')) {
-			blocks.push({ kind: 'heading', text: line.slice(3).trim() });
+			const headingText = line.slice(3).trim();
+			if (/^\d+\.\s+/.test(headingText)) {
+				index += 1;
+				const answerLines: string[] = [];
+
+				while (index < lines.length) {
+					const answerLine = lines[index] ?? '';
+					const trimmedAnswerLine = answerLine.trim();
+					if (trimmedAnswerLine === '---' || trimmedAnswerLine.startsWith('# ') || trimmedAnswerLine.startsWith('## ')) {
+						break;
+					}
+					answerLines.push(answerLine);
+					index += 1;
+				}
+
+				blocks.push({ kind: 'faq', question: headingText, answer: parseMarkdown(answerLines.join('\n')) });
+				continue;
+			}
+
+			blocks.push({ kind: 'heading', text: headingText });
 			index += 1;
 			continue;
 		}
@@ -96,6 +145,10 @@ function parseMarkdown(content: string): ImportantBlock[] {
 			const items: string[] = [];
 			while (index < lines.length) {
 				const listLine = (lines[index] ?? '').trim();
+				if (!listLine) {
+					index += 1;
+					continue;
+				}
 				if (!listLine.startsWith('- ')) break;
 				items.push(listLine.slice(2).trim());
 				index += 1;
@@ -104,10 +157,33 @@ function parseMarkdown(content: string): ImportantBlock[] {
 			continue;
 		}
 
+		if (/^\d+\.\s+/.test(line)) {
+			const items: string[] = [];
+			while (index < lines.length) {
+				const listLine = (lines[index] ?? '').trim();
+				if (!listLine) {
+					index += 1;
+					continue;
+				}
+				if (!/^\d+\.\s+/.test(listLine)) break;
+				items.push(listLine.replace(/^\d+\.\s+/, '').trim());
+				index += 1;
+			}
+			blocks.push({ kind: 'orderedList', items });
+			continue;
+		}
+
 		const paragraphLines: string[] = [];
 		while (index < lines.length) {
 			const paragraphLine = (lines[index] ?? '').trim();
-			if (!paragraphLine || paragraphLine === '---' || paragraphLine.startsWith('# ') || paragraphLine.startsWith('## ') || paragraphLine.startsWith('- ')) {
+			if (
+				!paragraphLine ||
+				paragraphLine === '---' ||
+				paragraphLine.startsWith('# ') ||
+				paragraphLine.startsWith('## ') ||
+				paragraphLine.startsWith('- ') ||
+				/^\d+\.\s+/.test(paragraphLine)
+			) {
 				break;
 			}
 			paragraphLines.push(paragraphLine);
@@ -126,6 +202,9 @@ function parseMarkdown(content: string): ImportantBlock[] {
 }
 
 export default function ImportantPage({ content }: { content: string }) {
+	const locale = useLocale();
+	const { timeZone, hourCycle } = useViewerDateTimePreferences();
+	const inlineOptions: InlineRenderOptions = { locale, timeZone, hourCycle };
 	const blocks = parseMarkdown(content);
 	const title = blocks.find((block) => block.kind === 'title');
 	const [fullscreenImage, setFullscreenImage] = useState<{ src: string; alt: string } | null>(null);
@@ -141,64 +220,109 @@ export default function ImportantPage({ content }: { content: string }) {
 		return () => document.removeEventListener('keydown', onKey);
 	}, [fullscreenImage]);
 
+	const renderBlock = (block: ImportantBlock, key: string, compact = false): ReactNode => {
+		if (block.kind === 'title') return null;
+
+		if (block.kind === 'heading') {
+			return (
+				<h2 key={key} className="text-xl font-semibold tracking-tight text-neutral-50 sm:text-2xl">
+					{renderInline(block.text, inlineOptions)}
+				</h2>
+			);
+		}
+
+		if (block.kind === 'paragraph') {
+			return (
+				<p key={key} className="max-w-3xl leading-7 text-neutral-300">
+					{renderInline(block.text, inlineOptions)}
+				</p>
+			);
+		}
+
+		if (block.kind === 'image') {
+			return (
+				<button
+					key={key}
+					type="button"
+					onClick={() => setFullscreenImage({ src: block.src, alt: block.alt })}
+					className="block max-w-sm cursor-zoom-in overflow-hidden rounded-2xl border border-white/8 sm:max-w-md"
+				>
+					<img src={block.src} alt={block.alt} className="w-full" />
+				</button>
+			);
+		}
+
+		if (block.kind === 'faq') {
+			return (
+				<details key={key} className="group overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-sm shadow-black/20">
+					<summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm text-neutral-200 transition hover:bg-white/[0.03] [&::-webkit-details-marker]:hidden [&::marker]:hidden">
+						<span className="font-semibold text-neutral-100">{renderInline(block.question, inlineOptions)}</span>
+						<svg
+							className="h-5 w-5 shrink-0 text-neutral-400 transition-transform group-open:rotate-180"
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							strokeWidth={2}
+							stroke="currentColor"
+							aria-hidden="true"
+						>
+							<path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
+						</svg>
+					</summary>
+					<div className="space-y-4 border-t border-neutral-800 px-4 py-3">
+						{block.answer.map((answerBlock, answerIndex) => renderBlock(answerBlock, `${key}-answer-${answerIndex}`, true))}
+					</div>
+				</details>
+			);
+		}
+
+		if (block.kind === 'orderedList') {
+			return (
+				<ol key={key} className="ml-5 list-decimal space-y-2 text-neutral-300">
+					{block.items.map((item, itemIndex) => (
+						<li key={`${key}-item-${itemIndex}`} className="pl-1 leading-7">
+							{renderInline(item, inlineOptions)}
+						</li>
+					))}
+				</ol>
+			);
+		}
+
+		if (compact) {
+			return (
+				<ul key={key} className="ml-5 list-disc space-y-2 text-neutral-300">
+					{block.items.map((item, itemIndex) => (
+						<li key={`${key}-item-${itemIndex}`} className="pl-1 leading-7">
+							{renderInline(item, inlineOptions)}
+						</li>
+					))}
+				</ul>
+			);
+		}
+
+		return (
+			<ul key={key} className="space-y-3">
+				{block.items.map((item, itemIndex) => (
+					<li key={`${key}-item-${itemIndex}`} className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 leading-7 text-neutral-200">
+						{renderInline(item, inlineOptions)}
+					</li>
+				))}
+			</ul>
+		);
+	};
+
 	return (
 		<section className="text-sm text-neutral-200">
 			<div className="space-y-8 rounded-2xl border border-neutral-800 bg-neutral-950 px-4 py-6 shadow-sm shadow-black/20 sm:px-6">
 				{title && title.kind === 'title' ? (
 					<header className="space-y-3 border-b border-neutral-800 pb-6">
 						<h1 className="text-2xl font-semibold tracking-tight text-neutral-50 sm:text-3xl">
-							{renderInline(title.text)}
+							{renderInline(title.text, inlineOptions)}
 						</h1>
 					</header>
 				) : null}
 
-				<div className="space-y-6">
-					{blocks.map((block, index) => {
-						if (block.kind === 'title') return null;
-
-						if (block.kind === 'heading') {
-							return (
-								<h2 key={`heading-${index}`} className="text-xl font-semibold tracking-tight text-neutral-50 sm:text-2xl">
-									{renderInline(block.text)}
-								</h2>
-							);
-						}
-
-						if (block.kind === 'paragraph') {
-							return (
-								<p key={`paragraph-${index}`} className="max-w-3xl leading-7 text-neutral-300">
-									{renderInline(block.text)}
-								</p>
-							);
-						}
-
-						if (block.kind === 'image') {
-							return (
-								<button
-									key={`image-${index}`}
-									type="button"
-									onClick={() => setFullscreenImage({ src: block.src, alt: block.alt })}
-									className="block max-w-sm cursor-zoom-in overflow-hidden rounded-2xl border border-white/8 sm:max-w-md"
-								>
-									<img src={block.src} alt={block.alt} className="w-full" />
-								</button>
-							);
-						}
-
-						return (
-							<ul key={`list-${index}`} className="space-y-3">
-								{block.items.map((item, itemIndex) => (
-									<li
-										key={`item-${itemIndex}`}
-										className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 leading-7 text-neutral-200"
-									>
-										{renderInline(item)}
-									</li>
-								))}
-							</ul>
-						);
-					})}
-				</div>
+				<div className="space-y-6">{blocks.map((block, index) => renderBlock(block, `block-${index}`))}</div>
 			</div>
 
 			{fullscreenImage ? (

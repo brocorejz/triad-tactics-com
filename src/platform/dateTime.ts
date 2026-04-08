@@ -76,6 +76,44 @@ export function formatLocalizedDateTime(
 	}
 }
 
+export function formatLocalizedFixedTime(
+	value: string | null,
+	options: {
+		locale: string;
+		timeZone: string | null;
+		hourCycle?: ViewerHourCycle | null;
+		sourceOffsetMinutes: number;
+		timeStyle?: Intl.DateTimeFormatOptions['timeStyle'];
+	}
+): string | null {
+	const { locale, timeZone, hourCycle, sourceOffsetMinutes, timeStyle = 'short' } = options;
+	if (!value || !timeZone) return null;
+
+	const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+	if (!match) return null;
+
+	const hours = Number(match[1]);
+	const minutes = Number(match[2]);
+	if (hours > 23 || minutes > 59) return null;
+
+	const utcTimestamp = Date.UTC(2024, 0, 7, hours, minutes) - sourceOffsetMinutes * 60_000;
+	const date = new Date(utcTimestamp);
+	const formatOptions: Intl.DateTimeFormatOptions = {
+		timeStyle,
+		timeZone
+	};
+
+	if (hourCycle) {
+		formatOptions.hourCycle = hourCycle;
+	}
+
+	try {
+		return new Intl.DateTimeFormat(locale, formatOptions).format(date);
+	} catch {
+		return null;
+	}
+}
+
 export function formatLocalizedDate(
 	value: string | Date | null,
 	options: {
